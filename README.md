@@ -1,7 +1,17 @@
 # SqlSugar 4.X  API
+
+In addition to EF, the most powerful ORM
+
 ## Contactinfomation  
 Email:610262374@qq.com 
 QQ Group:225982985
+
+## Nuget 
+Install-Package sqlSugar  (MySql、SqlServer、Sqlite、Oracle)  
+Install-Package sqlSugarCore  (MySql、SqlServer、sqlite、Oracle)
+
+## Here's the history version
+https://github.com/sunkaixuan/SqlSugar/tree/master
 
 ##  1. Query
 
@@ -48,6 +58,26 @@ var skip5 = db.Queryable<Student>().Skip(5).ToList();
 ``` 
 
 ### 1.4 Join
+
+#### easy join 
+```c
+//2 join
+var list5 = db.Queryable<Student, School>((st, sc) => st.SchoolId == sc.Id).Select((st,sc)=>new {st.Name,st.Id,schoolName=sc.Name}).ToList();
+```
+
+```c
+//3 join 
+var list6 = db.Queryable<Student, School,School>((st, sc,sc2) => st.SchoolId == sc.Id&&sc.Id==sc2.Id)
+    .Select((st, sc,sc2) => new { st.Name, st.Id, schoolName = sc.Name,schoolName2=sc2.Name }).ToList();
+ ```
+ 
+ ```c
+//3 join page
+var list7= db.Queryable<Student, School, School>((st, sc, sc2) => st.SchoolId == sc.Id && sc.Id == sc2.Id)
+.Select((st, sc, sc2) => new { st.Name, st.Id, schoolName = sc.Name, schoolName2 = sc2.Name }).ToPageList(1,2);
+```
+
+#### left join  
 ```c
 //join  2
 var list = db.Queryable<Student, School>((st, sc) => new object[] {
@@ -74,6 +104,19 @@ JoinType.Left,st.SchoolId==sc.Id
 .OrderBy(st=>st.Id,OrderByType.Desc)
 .OrderBy((st,sc)=>sc.Id,OrderByType.Desc)
 .Select((st, sc) => new ViewModelStudent { Name = st.Name, SchoolId = sc.Id }).ToList();
+```
+
+### subquery
+```c
+var getAll = db.Queryable<Student, School>((st, sc) => new object[] {
+ JoinType.Left,st.Id==sc.Id})
+.Where(st => st.Id == SqlFunc.Subqueryable<School>().Where(s => s.Id == st.Id).Select(s => s.Id))
+.ToList();
+      
+//sql
+SELECT `st`.`ID`,`st`.`SchoolId`,`st`.`Name`,`st`.`CreateTime` 
+     FROM `STudent` st Left JOIN `School` sc ON ( `st`.`ID` = `sc`.`Id` )  
+      WHERE ( `st`.`ID` =(SELECT `Id` FROM `School` WHERE ( `Id` = `st`.`ID` ) limit 0,1))
 ```
 
 ### 1.5 SqlFunctions
@@ -279,61 +322,24 @@ public int TestId { get; set; }
 
  ##  6. Use Tran
   ```c
-
-//1. no result 
-var result = db.UseTran(() =>
+var result = db.Ado.UseTran(() =>
 {
-  db.Ado.ExecuteCommand("delete student");
-});
-
-
-//2 has result 
-var result2 = db.UseTran<List<Student>>(() =>
-{
-  return db.Queryable<Student>().ToList();
-});
-
-
-//3 use try
-try
-{
-  db.Ado.BeginTran();
-  xxxx
-  db.Ado.CommitTran();
-}
-catch (Exception)
-{
-  db.Ado.RollbackTran();
-  throw;
-}
+          
+    var beginCount = db.Queryable<Student>().ToList();
+    db.Ado.ExecuteCommand("delete student");
+    var endCount = db.Queryable<Student>().Count();
+    throw new Exception("error haha");
+})
    ```
- ##  7. Use SP
+ ##  7. Use Store Procedure
 ```c
-   //1. no result 
-  db.Ado.UseStoredProcedure(() =>
-  {
-      string spName = "sp_help";
-      var getSpReslut = db.Ado.SqlQueryDynamic(spName, new { objname = "student" });
-  });
-
-  //2. has result 
-  var result= db.Ado.UseStoredProcedure<dynamic>(() =>
-  {
-      string spName = "sp_help";
-      return db.Ado.SqlQueryDynamic(spName, new { objname = "student" });
-  });
-  
-  //3. has output 
-  object outPutValue;
-  var outputResult = db.Ado.UseStoredProcedure<dynamic>(() =>
-  {
-      string spName = "sp_school";
-      var p1 = new SugarParameter("@p1", "1");
-      var p2= new SugarParameter("@p2", null,true);//isOutput=true
-      var dbResult= db.Ado.SqlQueryDynamic(spName,new SugarParameter[] {p1,p2 });
-      outPutValue = p2.Value;
-      return dbResult;
-  });
+ 
+var dt2 = db.Ado.UseStoredProcedure().GetDataTable("sp_school",new{p1=1,p2=null});
+ 
+//output
+var p11 = new SugarParameter("@p1", "1");
+var p22 = new SugarParameter("@p2", null, true);//isOutput=true
+var dt2 = db.Ado.UseStoredProcedure().GetDataTable("sp_school",p11,p22);
 ```
 
 ## 8. DbFirst
@@ -397,5 +403,32 @@ var db = GetInstance();
     .CreateClassFile("c:\\Demo\\6");
 }
 ```
+## 8.Code First
+```
+db.CodeFirst.BackupTable().InitTables(typeof(CodeTable),typeof(CodeTable2)); //change entity backupTable
+db.CodeFirst.InitTables(typeof(CodeTable),typeof(CodeTable2));
+```
+
+## 9. AOP LOG
+```
+db.Aop.OnLogExecuted = (sql, pars) => //SQL执行完事件
+{
+ 
+};
+db.Aop.OnLogExecuting = (sql, pars) => //SQL执行前事件
+{
+ 
+};
+db.Aop.OnError = (exp) =>//执行SQL 错误事件
+{
+                 
+};
+db.Aop.OnExecutingChangeSql = (sql, pars) => //SQL执行前 可以修改SQL
+{
+    return new KeyValuePair<string, SugarParameter[]>(sql,pars);
+};
+
+```
+
 More
 http://www.codeisbug.com/Doc/8
