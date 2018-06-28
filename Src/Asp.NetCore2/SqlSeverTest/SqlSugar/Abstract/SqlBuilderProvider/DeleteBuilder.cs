@@ -65,7 +65,7 @@ namespace SqlSugar
         {
             get
             {
-                return "[{0}]=N'{1}'";
+                return Builder.SqlTranslationLeft+"{0}"+Builder.SqlTranslationRight+"=N'{1}'";
             }
         }
         public string WhereInAreaTemplate
@@ -84,7 +84,7 @@ namespace SqlSugar
             {
                 var result = Builder.GetTranslationTableName(EntityInfo.EntityName);
                 result += UtilConstants.Space;
-                if (this.TableWithString.IsValuable())
+                if (this.TableWithString.HasValue())
                 {
                     result += TableWithString + UtilConstants.Space;
                 }
@@ -148,12 +148,21 @@ namespace SqlSugar
             resolveExpress.MappingColumns = Context.MappingColumns;
             resolveExpress.MappingTables = Context.MappingTables;
             resolveExpress.IgnoreComumnList = Context.IgnoreColumns;
+            resolveExpress.SqlFuncServices = Context.CurrentConnectionConfig.ConfigureExternalServices == null ? null : Context.CurrentConnectionConfig.ConfigureExternalServices.SqlFuncServices;
+            resolveExpress.InitMappingInfo = Context.InitMppingInfo;
+            resolveExpress.RefreshMapping = () =>
+            {
+                resolveExpress.MappingColumns = Context.MappingColumns;
+                resolveExpress.MappingTables = Context.MappingTables;
+                resolveExpress.IgnoreComumnList = Context.IgnoreColumns;
+                resolveExpress.SqlFuncServices = Context.CurrentConnectionConfig.ConfigureExternalServices == null ? null : Context.CurrentConnectionConfig.ConfigureExternalServices.SqlFuncServices;
+            };
             resolveExpress.Resolve(expression, resolveType);
             if (this.Parameters == null)
                 this.Parameters = new List<SugarParameter>();
             this.Parameters.AddRange(resolveExpress.Parameters);
-            var reval = resolveExpress.Result;
-            return reval;
+            var result = resolveExpress.Result;
+            return result;
         }
         #endregion
     }

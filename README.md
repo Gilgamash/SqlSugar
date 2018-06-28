@@ -2,16 +2,74 @@
 
 In addition to EF, the most powerful ORM
 
+Support：MySql、SqlServer、Sqlite、Oracle
+
 ## Contactinfomation  
 Email:610262374@qq.com 
 QQ Group:225982985
 
 ## Nuget 
-Install-Package sqlSugar  (MySql、SqlServer、Sqlite、Oracle)  
-Install-Package sqlSugarCore  (MySql、SqlServer、sqlite、Oracle)
+
+.net Install：
+```
+Install-Package sqlSugar 
+```
+.net core Install：
+```
+Install-Package sqlSugarCore
+```
 
 ## Here's the history version
 https://github.com/sunkaixuan/SqlSugar/tree/master
+
+
+
+# Let's look at a DEMO first
+```
+//Create DbContext 
+public class DbContext
+{
+    public DbContext()
+    {
+        db = new SqlSugarClient(new ConnectionConfig()
+        {
+            ConnectionString = Config.ConnectionString,
+            DbType = DbType.Oracle,
+            IsAutoCloseConnection = true
+        });
+    }
+    public SqlSugarClient Db;
+    public SimpleClient<Student> StudentDb { get { return new SimpleClient<Student>(Db); } }
+    public SimpleClient<School> SchoolDb { get { return new SimpleClient<School>(Db); } }
+}
+public class Business : DbContext
+{
+    //use DbContext
+    public void GetAll()
+    {
+
+        //use Db get student list
+        List<Student> list= Db.Queryable<Student>().ToList();
+
+        //use  StudentDb get student list
+        List<Student> list2=StudentDb.GetList();
+        //StudentDb.GetById
+        //StudentDb.Delete
+        //StudentDb.Update
+        //StudentDb.Insert
+        //StudentDb.GetPageList
+        //....
+        //SchoolDb.GetById
+        //....
+
+    }
+}
+```
+SimpleClient encapsulates common operations
+
+Transaction or multi table operation use SqlSugarClient
+
+# Detailed usage introduction
 
 ##  1. Query
 
@@ -411,19 +469,19 @@ db.CodeFirst.InitTables(typeof(CodeTable),typeof(CodeTable2));
 
 ## 9. AOP LOG
 ```
-db.Aop.OnLogExecuted = (sql, pars) => //SQL执行完事件
+db.Aop.OnLogExecuted = (sql, pars) => //SQL executed event
 {
  
 };
-db.Aop.OnLogExecuting = (sql, pars) => //SQL执行前事件
+db.Aop.OnLogExecuting = (sql, pars) => //SQL executing event (pre-execution)
 {
  
 };
-db.Aop.OnError = (exp) =>//执行SQL 错误事件
+db.Aop.OnError = (exp) =>//SQL execution error event
 {
                  
 };
-db.Aop.OnExecutingChangeSql = (sql, pars) => //SQL执行前 可以修改SQL
+db.Aop.OnExecutingChangeSql = (sql, pars) => //SQL executing event (pre-execution,SQL script can be modified)
 {
     return new KeyValuePair<string, SugarParameter[]>(sql,pars);
 };

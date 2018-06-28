@@ -145,6 +145,7 @@ namespace OrmTest.Demo
             var t1 = db.Ado.SqlQuery<string>("select 'a'");
             var t2 = db.Ado.GetInt("select 1");
             var t3 = db.Ado.GetDataTable("select 1 as id");
+            var t4 = db.Ado.SqlQuery<Student>("select 1 as id,'aa' as name");
             db.Ado.CommitTran();
             //more
             //db.Ado.GetXXX...
@@ -152,6 +153,7 @@ namespace OrmTest.Demo
         public static void Easy()
         {
             var db = GetInstance();
+            var dbTime = db.GetDate();
             var getAll = db.Queryable<Student>().ToList();
             var getLike = db.Queryable<Student>().Where(it => it.Name.Contains("a")).ToList();
             var getAllOrder = db.Queryable<Student>().OrderBy(it => it.Id).OrderBy(it => it.Name, OrderByType.Desc).ToList();
@@ -281,6 +283,7 @@ namespace OrmTest.Demo
         {
             var db = GetInstance();
             var t1 = db.Queryable<Student>().Where(it => SqlFunc.ToLower(it.Name) == SqlFunc.ToLower("JACK")).ToList();
+            var t2 = db.Queryable<Student>().Where(it => SqlFunc.IsNull(it.Name, "nullvalue") == "nullvalue").ToList();
             //SELECT [Id],[SchoolId],[Name],[CreateTime] FROM [Student]  WHERE ((LOWER([Name])) = (LOWER(@MethodConst0)) )
 
             /***More Functions***/

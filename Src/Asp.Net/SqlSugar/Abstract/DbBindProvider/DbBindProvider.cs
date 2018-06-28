@@ -18,33 +18,31 @@ namespace SqlSugar
         public virtual string GetDbTypeName(string csharpTypeName)
         {
             if (csharpTypeName == UtilConstants.ByteArrayType.Name)
-            {
                 return "varbinary";
-            }
-            if (csharpTypeName == "Int32")
+            if (csharpTypeName.ToLower() == "int32")
                 csharpTypeName = "int";
-            if (csharpTypeName == "Int16")
+            if (csharpTypeName.ToLower() == "int16")
                 csharpTypeName = "short";
-            if (csharpTypeName == "Int64")
+            if (csharpTypeName.ToLower() == "int64")
                 csharpTypeName = "long";
-            if (csharpTypeName == "Boolean")
+            if (csharpTypeName.ToLower().IsIn("boolean", "bool"))
                 csharpTypeName = "bool";
             var mappings = this.MappingTypes.Where(it => it.Value.ToString().Equals(csharpTypeName, StringComparison.CurrentCultureIgnoreCase));
-            return mappings.IsValuable() ? mappings.First().Key : "varchar";
+            return mappings.HasValue() ? mappings.First().Key : "varchar";
         }
         public string GetCsharpTypeName(string dbTypeName)
         {
             var mappings = this.MappingTypes.Where(it => it.Key == dbTypeName);
-            return mappings.IsValuable() ? mappings.First().Key : "string";
+            return mappings.HasValue() ? mappings.First().Key : "string";
         }
         public virtual string GetConvertString(string dbTypeName)
         {
-            string reval = string.Empty;
+            string result = string.Empty;
             switch (dbTypeName.ToLower())
             {
                 #region Int
                 case "int":
-                    reval = "Convert.ToInt32";
+                    result = "Convert.ToInt32";
                     break;
                 #endregion
 
@@ -55,19 +53,19 @@ namespace SqlSugar
                 case "nvarchar":
                 case "varchar":
                 case "text":
-                    reval = "Convert.ToString";
+                    result = "Convert.ToString";
                     break;
                 #endregion
 
                 #region Long
                 case "bigint":
-                    reval = "Convert.ToInt64";
+                    result = "Convert.ToInt64";
                     break;
                 #endregion
 
                 #region Bool
                 case "bit":
-                    reval = "Convert.ToBoolean";
+                    result = "Convert.ToBoolean";
                     break;
 
                 #endregion
@@ -78,7 +76,7 @@ namespace SqlSugar
                 case "datetime":
                 case "date":
                 case "datetime2":
-                    reval = "Convert.ToDateTime";
+                    result = "Convert.ToDateTime";
                     break;
                 #endregion
 
@@ -88,13 +86,13 @@ namespace SqlSugar
                 case "numeric":
                 case "money":
                 case "decimal":
-                    reval = "Convert.ToDecimal";
+                    result = "Convert.ToDecimal";
                     break;
                 #endregion
 
                 #region Double
                 case "float":
-                    reval = "Convert.ToDouble";
+                    result = "Convert.ToDouble";
                     break;
                 #endregion
 
@@ -102,47 +100,47 @@ namespace SqlSugar
                 case "varbinary":
                 case "binary":
                 case "image":
-                    reval = "byte[]";
+                    result = "byte[]";
                     break;
                 #endregion
 
                 #region Float
                 case "real":
-                    reval = "Convert.ToSingle";
+                    result = "Convert.ToSingle";
                     break;
                 #endregion
 
                 #region Short
                 case "smallint":
-                    reval = "Convert.ToInt16";
+                    result = "Convert.ToInt16";
                     break;
                 #endregion
 
                 #region Byte
                 case "tinyint":
-                    reval = "Convert.ToByte";
+                    result = "Convert.ToByte";
                     break;
 
                 #endregion
 
                 #region Guid
                 case "uniqueidentifier":
-                    reval = "Guid.Parse";
+                    result = "Guid.Parse";
                     break;
                 #endregion
 
                 #region Null
                 default:
-                    reval = null;
+                    result = null;
                     break;
                     #endregion
             }
-            return reval;
+            return result;
         }
         public virtual string GetPropertyTypeName(string dbTypeName)
         {
             dbTypeName = dbTypeName.ToLower();
-            var propertyTypes = MappingTypes.Where(it => it.Key == dbTypeName);
+            var propertyTypes = MappingTypes.Where(it => it.Key.Equals(dbTypeName, StringComparison.CurrentCultureIgnoreCase));
             if (dbTypeName == "int32")
             {
                 return "int";
@@ -151,13 +149,21 @@ namespace SqlSugar
             {
                 return "long";
             }
+            else if (dbTypeName == "int16")
+            {
+                return "short";
+            }
             else if (propertyTypes == null)
             {
                 return "other";
             }
-            else if (dbTypeName == "xml")
+            else if (dbTypeName.IsContainsIn("xml", "string", "String"))
             {
                 return "string";
+            }
+            else if (dbTypeName.IsContainsIn("boolean", "bool"))
+            {
+                return "bool";
             }
             else if (propertyTypes == null || propertyTypes.Count() == 0)
             {
@@ -173,7 +179,7 @@ namespace SqlSugar
                 return propertyTypes.First().Value.ToString();
             }
         }
-        public virtual List<T> DataReaderToList<T>(Type type, IDataReader dataReader, string fields)
+        public virtual List<T> DataReaderToList<T>(Type type, IDataReader dataReader)
         {
             using (dataReader)
             {
@@ -181,7 +187,7 @@ namespace SqlSugar
                 {
                     return GetKeyValueList<T>(type, dataReader);
                 }
-                else if (type.IsValueType() || type == UtilConstants.StringType)
+                else if (type.IsValueType() || type == UtilConstants.StringType||type== UtilConstants.ByteArrayType)
                 {
                     return GetValueTypeList<T>(type, dataReader);
                 }
@@ -191,7 +197,7 @@ namespace SqlSugar
                 }
                 else
                 {
-                    return GetEntityList<T>(Context, dataReader, fields);
+                    return GetEntityList<T>(Context, dataReader);
                 }
             }
         }

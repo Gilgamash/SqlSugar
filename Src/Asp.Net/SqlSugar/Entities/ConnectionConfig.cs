@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,10 +25,24 @@ namespace SqlSugar
         /// </summary>
         public InitKeyType InitKeyType = InitKeyType.SystemTable;
         /// <summary>
+        ///If true, there is only one connection instance in the same thread within the same connection string
+        /// </summary>
+        public bool IsShardSameThread { get; set; }
+        /// <summary>
         /// Configure External Services replace default services,For example, Redis storage
         /// </summary>
+        [JsonIgnore]
         public ConfigureExternalServices ConfigureExternalServices = _DefaultServices;
         private static ConfigureExternalServices _DefaultServices = new ConfigureExternalServices();
+        /// <summary>
+        /// If SlaveConnectionStrings has value,ConnectionString is write operation, SlaveConnectionStrings is read operation.
+        /// All operations within a transaction is ConnectionString
+        /// </summary>
+        public List<SlaveConnectionConfig> SlaveConnectionConfigs { get; set; }
+        /// <summary>
+        /// More Gobal Settings
+        /// </summary>
+        public ConnMoreSettings MoreSettings { get; set; }
     }
 
     public class ConfigureExternalServices
@@ -49,7 +64,7 @@ namespace SqlSugar
             set{ _SerializeService = value;}
         }
 
-        public ICacheService ReflectionInoCache
+        public ICacheService ReflectionInoCacheService
         {
             get
             {
@@ -61,7 +76,7 @@ namespace SqlSugar
             set{_ReflectionInoCache = value;}
         }
 
-        public ICacheService DataInfoCache
+        public ICacheService DataInfoCacheService
         {
             get
             {
@@ -72,5 +87,8 @@ namespace SqlSugar
             }
             set { _DataInfoCache = value; }
         }
+
+        public List<SqlFuncExternal> SqlFuncServices { get; set; }
+        public List<KeyValuePair<string, CSharpDataType>> AppendDataReaderTypeMappings { get;  set; }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -46,7 +47,7 @@ namespace SqlSugar
             }
             this.TableInfoList = this.Context.Utilities.TranslateCopy(this.Context.DbMaintenance.GetTableInfoList());
             var viewList = this.Context.Utilities.TranslateCopy(this.Context.DbMaintenance.GetViewInfoList());
-            if (viewList.IsValuable())
+            if (viewList.HasValue())
             {
                 this.TableInfoList.AddRange(viewList);
             }
@@ -119,7 +120,7 @@ namespace SqlSugar
 
         public IDbFirst Where(params string[] objectNames)
         {
-            if (objectNames.IsValuable())
+            if (objectNames.HasValue())
             {
                 this.TableInfoList = this.TableInfoList.Where(it => objectNames.Contains(it.Name)).ToList();
             }
@@ -132,15 +133,22 @@ namespace SqlSugar
         {
             this.Namespace = nameSpace;
             Dictionary<string, string> result = new Dictionary<string, string>();
-            if (this.TableInfoList.IsValuable())
+            if (this.TableInfoList.HasValue())
             {
                 foreach (var tableInfo in this.TableInfoList)
                 {
-                    string classText = null;
-                    string className = tableInfo.Name;
-                    classText = GetClassString(tableInfo, ref className);
-                    result.Remove(className);
-                    result.Add(className, classText);
+                    try
+                    {
+                        string classText = null;
+                        string className = tableInfo.Name;
+                        classText = GetClassString(tableInfo, ref className);
+                        result.Remove(className);
+                        result.Add(className, classText);
+                    }
+                    catch (Exception ex)
+                    {
+                        Check.Exception(true, "Table '{0}' error,You can filter it with Db.DbFirst.Where(name=>name!=\"{0}\" ) \r\n Error message:{1}", tableInfo.Name, ex.Message);
+                    }
                 }
             }
             return result;
@@ -150,7 +158,7 @@ namespace SqlSugar
         {
             string classText;
             var columns = this.Context.DbMaintenance.GetColumnInfosByTableName(tableInfo.Name);
-            if (this.Context.IgnoreColumns.IsValuable())
+            if (this.Context.IgnoreColumns.HasValue())
             {
                 var entityName = this.Context.EntityMaintenance.GetEntityName(tableInfo.Name);
                 columns = columns.Where(c =>
@@ -159,10 +167,10 @@ namespace SqlSugar
             }
             classText = this.ClassTemplate;
             string ConstructorText = IsDefaultValue ? this.ConstructorTemplate : null;
-            if (this.Context.MappingTables.IsValuable())
+            if (this.Context.MappingTables.HasValue())
             {
                 var mappingInfo = this.Context.MappingTables.FirstOrDefault(it => it.DbTableName.Equals(tableInfo.Name, StringComparison.CurrentCultureIgnoreCase));
-                if (mappingInfo.IsValuable())
+                if (mappingInfo.HasValue())
                 {
                     className = mappingInfo.EntityName;
                 }
@@ -176,7 +184,7 @@ namespace SqlSugar
             classText = classText.Replace(DbFirstTemplate.KeyUsing, IsAttribute ? (this.UsingTemplate + "using " + UtilConstants.AssemblyName + ";\r\n") : this.UsingTemplate);
             classText = classText.Replace(DbFirstTemplate.KeyClassDescription, this.ClassDescriptionTemplate.Replace(DbFirstTemplate.KeyClassDescription, tableInfo.Description + "\r\n"));
             classText = classText.Replace(DbFirstTemplate.KeySugarTable, IsAttribute ? string.Format(DbFirstTemplate.ValueSugarTable, tableInfo.Name) : null);
-            if (columns.IsValuable())
+            if (columns.HasValue())
             {
                 foreach (var item in columns)
                 {
@@ -190,9 +198,9 @@ namespace SqlSugar
                     PropertyDescriptionText = GetPropertyDescriptionText(item, PropertyDescriptionText);
                     PropertyText = PropertyDescriptionText + PropertyText;
                     classText = classText.Replace(DbFirstTemplate.KeyPropertyName, PropertyText + (isLast ? "" : ("\r\n" + DbFirstTemplate.KeyPropertyName)));
-                    if (ConstructorText.IsValuable() && item.DefaultValue != null)
+                    if (ConstructorText.HasValue() && item.DefaultValue != null)
                     {
-                        var hasDefaultValue = columns.Skip(index + 1).Any(it => it.DefaultValue.IsValuable());
+                        var hasDefaultValue = columns.Skip(index + 1).Any(it => it.DefaultValue.HasValue());
                         ConstructorText = ConstructorText.Replace(DbFirstTemplate.KeyPropertyName, propertyName);
                         ConstructorText = ConstructorText.Replace(DbFirstTemplate.KeyDefaultValue, GetPropertyTypeConvert(item)) + (!hasDefaultValue ? "" : this.ConstructorTemplate);
                     }
@@ -215,7 +223,7 @@ namespace SqlSugar
             classText = classText.Replace(DbFirstTemplate.KeyUsing, IsAttribute ? (this.UsingTemplate + "using " + UtilConstants.AssemblyName + ";\r\n") : this.UsingTemplate);
             classText = classText.Replace(DbFirstTemplate.KeyClassDescription, this.ClassDescriptionTemplate.Replace(DbFirstTemplate.KeyClassDescription,"\r\n"));
             classText = classText.Replace(DbFirstTemplate.KeySugarTable, IsAttribute ? string.Format(DbFirstTemplate.ValueSugarTable, className) : null);
-            if (columns.IsValuable())
+            if (columns.HasValue())
             {
                 foreach (var item in columns)
                 {
@@ -229,9 +237,9 @@ namespace SqlSugar
                     PropertyDescriptionText = GetPropertyDescriptionText(item, PropertyDescriptionText);
                     PropertyText = PropertyDescriptionText + PropertyText;
                     classText = classText.Replace(DbFirstTemplate.KeyPropertyName, PropertyText + (isLast ? "" : ("\r\n" + DbFirstTemplate.KeyPropertyName)));
-                    if (ConstructorText.IsValuable() && item.DefaultValue != null)
+                    if (ConstructorText.HasValue() && item.DefaultValue != null)
                     {
-                        var hasDefaultValue = columns.Skip(index + 1).Any(it => it.DefaultValue.IsValuable());
+                        var hasDefaultValue = columns.Skip(index + 1).Any(it => it.DefaultValue.HasValue());
                         ConstructorText = ConstructorText.Replace(DbFirstTemplate.KeyPropertyName, propertyName);
                         ConstructorText = ConstructorText.Replace(DbFirstTemplate.KeyDefaultValue, GetPropertyTypeConvert(item)) + (!hasDefaultValue ? "" : this.ConstructorTemplate);
                     }
@@ -247,13 +255,15 @@ namespace SqlSugar
         }
         public void CreateClassFile(string directoryPath, string nameSpace = "Models")
         {
+            var seChar= Path.DirectorySeparatorChar.ToString();
             Check.ArgumentNullException(directoryPath, "directoryPath can't null");
             var classStringList = ToClassStringList(nameSpace);
             if (classStringList.IsValuable())
             {
                 foreach (var item in classStringList)
                 {
-                    FileHelper.CreateFile(directoryPath.TrimEnd('\\').TrimEnd('/') + string.Format("\\{0}.cs", item.Key), item.Value, Encoding.UTF8);
+                    var filePath = directoryPath.TrimEnd('\\').TrimEnd('/') + string.Format(seChar + "{0}.cs", item.Key);
+                    FileHelper.CreateFile(filePath, item.Value, Encoding.UTF8);
                 }
             }
         }
@@ -324,7 +334,7 @@ namespace SqlSugar
         }
         private string GetPropertyName(DbColumnInfo item)
         {
-            if (this.Context.MappingColumns.IsValuable())
+            if (this.Context.MappingColumns.HasValue())
             {
                 var mappingInfo = this.Context.MappingColumns.SingleOrDefault(it => it.DbColumnName == item.DbColumnName && it.EntityName == GetEnityName(item));
                 return mappingInfo == null ? item.DbColumnName : mappingInfo.PropertyName;

@@ -49,6 +49,8 @@ namespace SqlSugar
         private static readonly MethodInfo getConvertByte = typeof(IDataRecordExtensions).GetMethod("GetConvertByte");
         private static readonly MethodInfo getConvertChar = typeof(IDataRecordExtensions).GetMethod("GetConvertChar");
         private static readonly MethodInfo getConvertDateTime = typeof(IDataRecordExtensions).GetMethod("GetConvertDateTime");
+        private static readonly MethodInfo getConvertTime = typeof(IDataRecordExtensions).GetMethod("GetConvertTime");
+        private static readonly MethodInfo getTime = typeof(IDataRecordExtensions).GetMethod("GetTime");
         private static readonly MethodInfo getConvertDecimal = typeof(IDataRecordExtensions).GetMethod("GetConvertDecimal");
         private static readonly MethodInfo getConvertDouble = typeof(IDataRecordExtensions).GetMethod("GetConvertDouble");
         private static readonly MethodInfo getConvertGuid = typeof(IDataRecordExtensions).GetMethod("GetConvertGuid");
@@ -74,12 +76,12 @@ namespace SqlSugar
 
         }
 
-        public IDataReaderEntityBuilder(SqlSugarClient context, IDataRecord dataRecord)
+        public IDataReaderEntityBuilder(SqlSugarClient context, IDataRecord dataRecord,List<string> fieldNames)
         {
             this.Context = context;
             this.DataRecord = dataRecord;
             this.DynamicBuilder = new IDataReaderEntityBuilder<T>();
-            this.ReaderKeys = new List<string>();
+            this.ReaderKeys = fieldNames;
         }
         #endregion
 
@@ -91,10 +93,6 @@ namespace SqlSugar
 
         public IDataReaderEntityBuilder<T> CreateBuilder(Type type)
         {
-            for (int i = 0; i < this.DataRecord.FieldCount; i++)
-            {
-                this.ReaderKeys.Add(this.DataRecord.GetName(i));
-            }
             DynamicMethod method = new DynamicMethod("SqlSugarEntity", type,
             new Type[] { typeof(IDataRecord) }, type, true);
             ILGenerator generator = method.GetILGenerator();
@@ -113,7 +111,7 @@ namespace SqlSugar
                     {
                         if (!ReaderKeys.Contains(mappInfo.DbColumnName))
                         {
-                            fileName = ReaderKeys.Single(it => it.Equals(mappInfo.DbColumnName, StringComparison.CurrentCultureIgnoreCase));
+                            fileName = ReaderKeys.FirstOrDefault(it => it.Equals(mappInfo.DbColumnName, StringComparison.CurrentCultureIgnoreCase)|| it.Equals(mappInfo.PropertyName, StringComparison.CurrentCultureIgnoreCase));
                         }
                         else
                         {
@@ -121,14 +119,13 @@ namespace SqlSugar
                         }
                     }
                 }
-                if (Context.IgnoreColumns != null && Context.IgnoreColumns.Any(it => it.PropertyName.Equals(propertyInfo.Name, StringComparison.CurrentCultureIgnoreCase)
-                         && it.EntityName.Equals(type.Name, StringComparison.CurrentCultureIgnoreCase)))
+                if (IsIgnore(type, propertyInfo)&&!this.ReaderKeys.Any(it=>it==fileName))
                 {
                     continue;
                 }
                 if (propertyInfo != null && propertyInfo.GetSetMethod() != null)
                 {
-                    if (propertyInfo.PropertyType.IsClass() && propertyInfo.PropertyType != UtilConstants.ByteArrayType)
+                    if (propertyInfo.PropertyType.IsClass() && propertyInfo.PropertyType != UtilConstants.ByteArrayType && propertyInfo.PropertyType != UtilConstants.ObjType)
                     {
                         BindClass(generator, result, propertyInfo);
                     }
@@ -136,7 +133,7 @@ namespace SqlSugar
                     {
                         if (this.ReaderKeys.Any(it => it.Equals(fileName, StringComparison.CurrentCultureIgnoreCase)))
                         {
-                            BindField(generator, result, propertyInfo, ReaderKeys.Single(it => it.Equals(fileName, StringComparison.CurrentCultureIgnoreCase)));
+                            BindField(generator, result, propertyInfo, ReaderKeys.First(it => it.Equals(fileName, StringComparison.CurrentCultureIgnoreCase)));
                         }
                     }
                 }
@@ -146,9 +143,15 @@ namespace SqlSugar
             DynamicBuilder.handler = (Load)method.CreateDelegate(typeof(Load));
             return DynamicBuilder;
         }
+
         #endregion
 
         #region Private methods
+        private bool IsIgnore(Type type, PropertyInfo propertyInfo)
+        {
+            return Context.IgnoreColumns != null && Context.IgnoreColumns.Any(it => it.PropertyName.Equals(propertyInfo.Name, StringComparison.CurrentCultureIgnoreCase)
+                                     && it.EntityName.Equals(type.Name, StringComparison.CurrentCultureIgnoreCase));
+        }
         private void BindClass(ILGenerator generator, LocalBuilder result, PropertyInfo propertyInfo)
         {
 
@@ -174,10 +177,9 @@ namespace SqlSugar
             bool isNullableType = false;
             MethodInfo method = null;
             Type bindPropertyType = UtilMethods.GetUnderType(bindProperty, ref isNullableType);
-            string dbTypeName = DataRecord.GetDataTypeName(ordinal);
-            if (Regex.IsMatch(dbTypeName, @"\(.+\)"))
-            {
-                dbTypeName = Regex.Replace(dbTypeName, @"\(.+\)", "");
+            string dbTypeName = UtilMethods.GetParenthesesValue(DataRecord.GetDataTypeName(ordinal));
+            if (dbTypeName.IsNullOrEmpty()) {
+                dbTypeName = bindPropertyType.Name;
             }
             string propertyName = bindProperty.Name;
             string validPropertyName = bind.GetPropertyTypeName(dbTypeName);
@@ -241,13 +243,15 @@ namespace SqlSugar
                     method = getString;
                     if (bindProperyTypeName == "guid")
                     {
-                        method =isNullableType? getConvertStringGuid : getStringGuid;
+                        method = isNullableType ? getConvertStringGuid : getStringGuid;
                     }
                     break;
                 case CSharpDataType.DateTime:
                     CheckType(bind.DateThrow, bindProperyTypeName, validPropertyName, propertyName);
                     if (bindProperyTypeName == "datetime")
                         method = isNullableType ? getConvertDateTime : getDateTime;
+                    if (bindProperyTypeName == "datetime"&&dbTypeName == "time")
+                        method = isNullableType ? getConvertTime : getTime;
                     break;
                 case CSharpDataType.@decimal:
                     CheckType(bind.DecimalThrow, bindProperyTypeName, validPropertyName, propertyName);
@@ -257,9 +261,9 @@ namespace SqlSugar
                 case CSharpDataType.@float:
                 case CSharpDataType.@double:
                     CheckType(bind.DoubleThrow, bindProperyTypeName, validPropertyName, propertyName);
-                    if (bindProperyTypeName == "double")
+                    if (bindProperyTypeName.IsIn( "double", "single")&&dbTypeName!="real")
                         method = isNullableType ? getConvertDouble : getDouble;
-                    if(bindProperyTypeName=="single")
+                    else
                         method = isNullableType ? getConvertFloat : getFloat;
                     break;
                 case CSharpDataType.Guid:
@@ -284,7 +288,7 @@ namespace SqlSugar
                         method = isNullableType ? getConvertInt64 : getInt64;
                     break;
                 case CSharpDataType.DateTimeOffset:
-                        method = isNullableType ? getConvertdatetimeoffset : getdatetimeoffset;
+                    method = isNullableType ? getConvertdatetimeoffset : getdatetimeoffset;
                     if (bindProperyTypeName == "datetime")
                         method = isNullableType ? getConvertdatetimeoffsetDate : getdatetimeoffsetDate;
                     break;
@@ -295,6 +299,10 @@ namespace SqlSugar
             if (method == null && bindPropertyType == UtilConstants.StringType)
             {
                 method = getConvertString;
+            }
+            if (bindPropertyType == UtilConstants.ObjType)
+            {
+                method = getValueMethod;
             }
             if (method == null)
                 method = isNullableType ? getOtherNull.MakeGenericMethod(bindPropertyType) : getOther.MakeGenericMethod(bindPropertyType);

@@ -26,8 +26,64 @@ namespace OrmTest.Demo
             //StoredProcedure();
             Enum();
             Simple();
+            SqlTest();
+            Subqueryable();
         }
 
+        private static void SqlTest()
+        {
+            var db = GetInstance();
+            var x = db.Ado.ExecuteCommand("select '@id' as id  from student  where id=@id",new { id=1});
+        }
+        private static void Subqueryable()
+        {
+            var db = GetInstance();
+            var i = 0;
+            var getAll11 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Max(s => s.Id) == i).ToList();
+            var getAll12 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Max(s => s.Id) == 1).ToList();
+            var getAll7 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Any()).ToList();
+
+            var getAll9 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Count() == 1).ToList();
+
+            //var getAll10 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).OrderBy(s => s.Id).Select(s => s.Id) == 1).ToList();
+            //var getAll14 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).OrderByDesc(s => s.Id).Select(s => s.Id) == 1).ToList();
+
+            var getAll8 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Where(s => s.Name == it.Name).NotAny()).ToList();
+
+            var getAll1 = db.Queryable<Student>().Where(it => it.Id == SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Select(s => s.Id)).ToList();
+
+            var getAll2 = db.Queryable<Student, School>((st, sc) => new object[] {
+                JoinType.Left,st.Id==sc.Id
+            })
+          .Where(st => st.Id == SqlFunc.Subqueryable<School>().Where(s => s.Id == st.Id).Select(s => s.Id))
+          .ToList();
+
+            var getAll3 = db.Queryable<Student, School>((st, sc) => new object[] {
+                JoinType.Left,st.Id==sc.Id
+            })
+           .Select(st =>
+                    new
+                    {
+                        name = st.Name,
+                        id = SqlFunc.Subqueryable<School>().Where(s => s.Id == st.Id).Select(s => s.Id)
+                    })
+          .ToList();
+
+            var getAll4 = db.Queryable<Student>().Select(it =>
+                   new
+                   {
+                       name = it.Name,
+                       id = SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Select(s => s.Id)
+                   }).ToList();
+
+            var getAll5 = db.Queryable<Student>().Select(it =>
+                      new Student
+                      {
+                          Name = it.Name,
+                          Id = SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Select(s => s.Id)
+                      }).ToList();
+
+        }
         private static void Simple()
         {
             //SqlSugarClient
@@ -129,10 +185,18 @@ namespace OrmTest.Demo
         private static void Ado()
         {
             var db = GetInstance();
+
+
+            string spName = "PR_TEST";
+            var p1 = new SugarParameter("@O_RESULT", null, true);
+            p1.IsRefCursor = true;
+            var dt3 = db.Ado.UseStoredProcedure().GetDataTable(spName, p1);
+
             db.Ado.BeginTran();
             var t1 = db.Ado.SqlQuery<string>("select 'a'  from dual");
             var t2 = db.Ado.GetInt("select 1  from dual");
             var t3 = db.Ado.GetDataTable("select 1 as id  from dual");
+            var sqlPage = db.SqlQueryable<Student>("select * from student").ToPageList(1, 2);
             db.Ado.CommitTran();
             //more
             //db.Ado.GetXXX...
@@ -277,6 +341,7 @@ namespace OrmTest.Demo
         {
             var db = GetInstance();
             var t1 = db.Queryable<Student>().Where(it => SqlFunc.ToLower(it.Name) == SqlFunc.ToLower("JACK")).ToList();
+            var t2 = db.Queryable<Student>().Where(it => SqlFunc.IsNull(it.Name, "nullvalue") == "nullvalue").ToList();
             //SELECT [Id],[SchoolId],[Name],[CreateTime] FROM [Student]  WHERE ((LOWER([Name])) = (LOWER(@MethodConst0)) )
 
             /***More Functions***/
@@ -316,10 +381,12 @@ namespace OrmTest.Demo
         {
             var db = GetInstance();
             db.IgnoreColumns.Add("TestId", "Student");
-            var s1 = db.Queryable<Student>().Select(it => new ViewModelStudent2 { Name = it.Name, Student = it }).ToList();
+            db.Insertable<Student>( new Student() { Name="abc" }).ExecuteCommand();
+            var s1 = db.Queryable<Student>().Select(it => new  { Name = it.Name, Student = it }).ToList();
             var s2 = db.Queryable<Student>().Select(it => new { id = it.Id, w = new { x = it } }).ToList();
             var s3 = db.Queryable<Student>().Select(it => new { newid = it.Id }).ToList();
             var s4 = db.Queryable<Student>().Select(it => new { newid = it.Id, obj = it }).ToList();
+            var s44 = db.Queryable<Student>().Where(it=>it.Name.Substring(0,1)=="a").ToList();
             var s5 = db.Queryable<Student>().Select(it => new ViewModelStudent2 { Student = it, Name = it.Name }).ToList();
             var s6 = db.Queryable<Student, School>((st, sc) => new object[] {
               JoinType.Left,st.SchoolId==sc.Id

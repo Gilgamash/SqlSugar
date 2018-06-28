@@ -9,6 +9,7 @@ namespace SqlSugar
 {
     public class SugarParameter : DbParameter
     {
+        public bool IsRefCursor { get; set; }
         public SugarParameter(string name, object value)
         {
             this.Value = value;
@@ -22,6 +23,21 @@ namespace SqlSugar
         {
             this.Value = value;
             this.ParameterName = name;
+            SettingDataType(type);
+        }
+        public SugarParameter(string name, object value, Type type,ParameterDirection direction)
+        {
+            this.Value = value;
+            this.ParameterName = name;
+            this.Direction = direction;
+            SettingDataType(type);
+        }
+        public SugarParameter(string name, object value, Type type, ParameterDirection direction,int size)
+        {
+            this.Value = value;
+            this.ParameterName = name;
+            this.Direction = direction;
+            this.Size = size;
             SettingDataType(type);
         }
 

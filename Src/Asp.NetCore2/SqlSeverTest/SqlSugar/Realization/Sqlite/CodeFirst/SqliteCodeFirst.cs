@@ -13,7 +13,7 @@ namespace SqlSugar
             string backupName = tableName + DateTime.Now.ToString("yyyyMMddHHmmss");
             Check.Exception(entityInfo.Columns.Where(it => it.IsPrimarykey).Count() > 1, "Use Code First ,The primary key must not exceed 1");
             List<DbColumnInfo> columns = new List<DbColumnInfo>();
-            if (entityInfo.Columns.IsValuable())
+            if (entityInfo.Columns.HasValue())
             {
                 foreach (var item in entityInfo.Columns.Where(it => it.IsIgnore == false))
                 {
@@ -31,7 +31,7 @@ namespace SqlSugar
             string backupName=tableName+DateTime.Now.ToString("yyyyMMddHHmmss");
             Check.Exception(entityInfo.Columns.Where(it => it.IsPrimarykey).Count() > 1, "Use Code First ,The primary key must not exceed 1");
             List<DbColumnInfo> columns = new List<DbColumnInfo>();
-            if (entityInfo.Columns.IsValuable())
+            if (entityInfo.Columns.HasValue())
             {
                 foreach (var item in entityInfo.Columns.Where(it=>it.IsIgnore==false))
                 {
@@ -39,15 +39,15 @@ namespace SqlSugar
                     columns.Add(dbColumnInfo);
                 }
             }
-            this.Context.DbMaintenance.CreateTable(tableName, columns);
+            this.Context.DbMaintenance.CreateTable(tableName, columns,true);
         }
         protected override DbColumnInfo EntityColumnToDbColumn(EntityInfo entityInfo, string tableName, EntityColumnInfo item)
         {
+            var propertyType = UtilMethods.GetUnderType(item.PropertyInfo);
             var result = new DbColumnInfo()
             {
-                DataType = this.Context.Ado.DbBind.GetDbTypeName(UtilMethods.GetUnderType(item.PropertyInfo).Name),
                 TableId = entityInfo.Columns.IndexOf(item),
-                DbColumnName = item.DbColumnName.IsValuable() ? item.DbColumnName : item.PropertyName,
+                DbColumnName = item.DbColumnName.HasValue() ? item.DbColumnName : item.PropertyName,
                 IsPrimarykey = item.IsPrimarykey,
                 IsIdentity = item.IsIdentity,
                 TableName = tableName,
@@ -56,6 +56,7 @@ namespace SqlSugar
                 ColumnDescription = item.ColumnDescription,
                 Length = item.Length
             };
+            GetDbType(item, propertyType, result);
             if (result.DataType.Equals("varchar", StringComparison.CurrentCultureIgnoreCase) && result.Length == 0)
             {
                 result.Length = 1;

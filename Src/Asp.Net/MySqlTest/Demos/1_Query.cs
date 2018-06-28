@@ -81,7 +81,7 @@ namespace OrmTest.Demo
             var student1 = db.Queryable<Student>().InSingle(1);
 
             //get SimpleClient
-            var sdb = db.SimpleClient;
+            var sdb = db.GetSimpleClient();
             var student2 = sdb.GetById<Student>(1);
             sdb.DeleteById<Student>(1);
             sdb.Insert(new Student() { Name = "xx" });
@@ -198,6 +198,7 @@ namespace OrmTest.Demo
         public static void Easy()
         {
             var db = GetInstance();
+            var dbTime = db.GetDate();
             var getAll = db.Queryable<Student>().ToList();
             var getTop2 = db.Queryable<Student>().Take(2).ToList();//TOP2
             var getLike = db.Queryable<Student>().Where(it => it.Name.Contains("a")).ToList();
@@ -215,6 +216,7 @@ namespace OrmTest.Demo
             var date = db.Queryable<Student>().Where(it => it.CreateTime.Value.Date ==DateTime.Now.Date).ToList();
             var isAny2 = db.Queryable<Student>().Any(it => it.Id == -1);
             var getListByRename = db.Queryable<School>().AS("Student").ToList();
+            var asCount = db.Queryable<object>().AS("student").Count();
             var in1 = db.Queryable<Student>().In(it => it.Id, new int[] { 1, 2, 3 }).ToList();
             var in2 = db.Queryable<Student>().In(new int[] { 1, 2, 3 }).ToList();
             int[] array = new int[] { 1, 2 };
@@ -232,6 +234,12 @@ namespace OrmTest.Demo
             var getDay1List = db.Queryable<Student>().Where(it => it.CreateTime.Value.Hour == 1).ToList();
             var getDateAdd = db.Queryable<Student>().Where(it => it.CreateTime.Value.AddDays(1) == DateTime.Now).ToList();
             var getDateIsSame = db.Queryable<Student>().Where(it => SqlFunc.DateIsSame(DateTime.Now, DateTime.Now, DateType.Hour)).ToList();
+            var test2 = db.Queryable<Student, School>((st, sc) => st.SchoolId == sc.Id)
+              .Where(st =>
+                SqlFunc.IF(st.Id > 1)
+                     .Return(st.Id)
+                     .ElseIF(st.Id == 1)
+                     .Return(st.SchoolId).End(st.Id) == 1).Select(st => st).ToList();
         }
         public static void Page()
         {
@@ -332,6 +340,8 @@ namespace OrmTest.Demo
         {
             var db = GetInstance();
             var t1 = db.Queryable<Student>().Where(it => SqlFunc.ToLower(it.Name) == SqlFunc.ToLower("JACK")).ToList();
+            var t2 = db.Queryable<Student>().Where(it => SqlFunc.IsNull(it.Name, "nullvalue") == "nullvalue").ToList();
+            var t3 = db.Queryable<Student>().Where(it => SqlFunc.MergeString("a", it.Name) == "nullvalue").ToList();
             //SELECT [Id],[SchoolId],[Name],[CreateTime] FROM [Student]  WHERE ((LOWER([Name])) = (LOWER(@MethodConst0)) )
 
             /***More Functions***/

@@ -20,7 +20,7 @@ namespace OrmTest.UnitTest
             var db = GetInstance();
             var shoolValue = SchoolEnum.HarvardUniversity;
             var enums = new SchoolEnum[] { shoolValue, SchoolEnum.UniversityOfOxford };
-            var list = db.Queryable<StudentEnum>().AS("student").Where(it => it.SchoolId == shoolValue).ToList();
+            var list = db.Queryable<StudentEnum>().AS("student").Where(it => it.SchoolId == shoolValue).Select(it=>it.SchoolId).ToList();
 
             var x = new StudentEnum()
             {
@@ -31,9 +31,9 @@ namespace OrmTest.UnitTest
             var id= db.Insertable(x).AS("student").ExecuteReturnIdentity();
             var data = db.Queryable<StudentEnum>().AS("student").InSingle(id);
             shoolValue = SchoolEnum.UniversityOfOxford;
-           var sql= db.Updateable<StudentEnum>().AS("student").UpdateColumns(it=>new StudentEnum() { Name="a" , SchoolId= shoolValue }).Where(it=>it.Id==id).ToSql();
-
+            var sql= db.Updateable<StudentEnum>().AS("student").UpdateColumns(it=>new StudentEnum() { Name="a" , SchoolId= shoolValue }).Where(it=>it.Id==id).ToSql();
             var sql2 = db.Updateable<StudentEnum>().AS("student").UpdateColumns(it => new StudentEnum() { Name = "a", SchoolId = SchoolEnum.UniversityOfOxford }).Where(it => it.Id == id).ToSql();
+            var sql3 = db.Updateable<StudentEnum>().AS("student").UpdateColumns(it =>  it.SchoolId == shoolValue  ).ToSql();
         }
     }
 }

@@ -256,12 +256,17 @@ namespace SqlSugar
             newContext.MappingColumns = this.Context.MappingColumns;
             newContext.MappingTables = this.Context.MappingTables;
             newContext.IgnoreComumnList = this.Context.IgnoreComumnList;
+            newContext.SqlFuncServices = this.Context.SqlFuncServices;
             newContext.Resolve(item, this.Context.IsJoin ? ResolveExpressType.WhereMultiple : ResolveExpressType.WhereSingle);
             this.Context.Index = newContext.Index;
             this.Context.ParameterIndex = newContext.ParameterIndex;
-            if (newContext.Parameters.IsValuable())
+            if (newContext.Parameters.HasValue())
             {
                 this.Context.Parameters.AddRange(newContext.Parameters);
+            }
+            if (newContext.SingleTableNameSubqueryShortName.HasValue())
+            {
+                this.Context.SingleTableNameSubqueryShortName = newContext.SingleTableNameSubqueryShortName;
             }
             var methodCallExpressionArgs = new MethodCallExpressionArgs()
             {
@@ -277,7 +282,7 @@ namespace SqlSugar
             newContext.Resolve(item, this.Context.IsJoin ? ResolveExpressType.WhereMultiple : ResolveExpressType.WhereSingle);
             this.Context.Index = newContext.Index;
             this.Context.ParameterIndex = newContext.ParameterIndex;
-            if (newContext.Parameters.IsValuable())
+            if (newContext.Parameters.HasValue())
             {
                 this.Context.Parameters.AddRange(newContext.Parameters);
             }
@@ -378,12 +383,12 @@ namespace SqlSugar
             {
                 if (this.Context.Result.IsLockCurrentParameter == false)
                 {
-                    var newContext = this.Context.GetCopyContext();
+                    var newContext = this.Context.GetCopyContextWithMapping();
                     var resolveExpressType = this.Context.IsSingle ? ResolveExpressType.WhereSingle : ResolveExpressType.WhereMultiple;
                     newContext.Resolve(item, resolveExpressType);
                     this.Context.Index = newContext.Index;
                     this.Context.ParameterIndex = newContext.ParameterIndex;
-                    if (newContext.Parameters.IsValuable())
+                    if (newContext.Parameters.HasValue())
                     {
                         this.Context.Parameters.AddRange(newContext.Parameters);
                     }
@@ -410,15 +415,20 @@ namespace SqlSugar
                     }
                     else
                     {
-                        asName = this.Context.GetTranslationText(item.Type.Name + "." + property.Name);
-                        var columnName = property.Name;
+                        var propertyName = property.Name;
+                        var dbColumnName = propertyName;
+                        var mappingInfo = this.Context.MappingColumns.FirstOrDefault(it => it.EntityName == item.Type.Name && it.PropertyName.Equals(propertyName, StringComparison.CurrentCultureIgnoreCase));
+                        if (mappingInfo.HasValue()) {
+                            dbColumnName = mappingInfo.DbColumnName;
+                        }
+                        asName = this.Context.GetTranslationText(item.Type.Name + "." + propertyName);
                         if (Context.IsJoin)
                         {
-                            this.Context.Result.Append(Context.GetAsString(asName, columnName, shortName.ObjToString()));
+                            this.Context.Result.Append(Context.GetAsString(asName, dbColumnName, shortName.ObjToString()));
                         }
                         else
                         {
-                            this.Context.Result.Append(Context.GetAsString(asName, columnName));
+                            this.Context.Result.Append(Context.GetAsString(asName, dbColumnName));
                         }
                     }
                 }

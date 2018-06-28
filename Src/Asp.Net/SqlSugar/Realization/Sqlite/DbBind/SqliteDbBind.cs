@@ -21,13 +21,24 @@ namespace SqlSugar
             if (csharpTypeName == "Boolean")
                 csharpTypeName = "bool";
             var mappings = this.MappingTypes.Where(it => it.Value.ToString().Equals(csharpTypeName, StringComparison.CurrentCultureIgnoreCase));
-            return mappings.IsValuable() ? mappings.First().Key : "varchar";
-        }
+            return mappings.HasValue() ? mappings.First().Key : "varchar";
+        }      
         public override List<KeyValuePair<string, CSharpDataType>> MappingTypes
         {
             get
             {
-                return new List<KeyValuePair<string, CSharpDataType>>()
+                var extService = this.Context.CurrentConnectionConfig.ConfigureExternalServices;
+                if (extService != null && extService.AppendDataReaderTypeMappings.HasValue())
+                {
+                    return extService.AppendDataReaderTypeMappings.Union(MappingTypesConst).ToList();
+                }
+                else
+                {
+                    return MappingTypesConst;
+                }
+            }
+        }
+        public static List<KeyValuePair<string, CSharpDataType>> MappingTypesConst = new List<KeyValuePair<string, CSharpDataType>>()
                 {
 
                     new KeyValuePair<string, CSharpDataType>("integer",CSharpDataType.@int),
@@ -57,6 +68,7 @@ namespace SqlSugar
                     new KeyValuePair<string, CSharpDataType>("int16",CSharpDataType.@short),
                     new KeyValuePair<string, CSharpDataType>("bigint",CSharpDataType.@long),
                     new KeyValuePair<string, CSharpDataType>("int64",CSharpDataType.@long),
+                    new KeyValuePair<string, CSharpDataType>("long",CSharpDataType.@long),
                     new KeyValuePair<string, CSharpDataType>("integer64",CSharpDataType.@long),
                     new KeyValuePair<string, CSharpDataType>("bit",CSharpDataType.@bool),
                     new KeyValuePair<string, CSharpDataType>("bool",CSharpDataType.@bool),
@@ -86,9 +98,7 @@ namespace SqlSugar
 
                     new KeyValuePair<string, CSharpDataType>("varchar",CSharpDataType.Guid),
                     new KeyValuePair<string, CSharpDataType>("guid",CSharpDataType.Guid)
-                };
-            }
-        }
+         };
         public override List<string> StringThrow
         {
             get

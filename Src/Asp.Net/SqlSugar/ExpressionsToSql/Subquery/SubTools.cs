@@ -23,8 +23,11 @@ namespace SqlSugar
                                                     new SubCount(){ Context=Context },
                                                     new SubMax(){ Context=Context },
                                                     new SubMin(){ Context=Context },
+                                                    new SubSum(){ Context=Context },
+                                                    new SubAvg(){ Context=Context },
                                                     new SubOrderBy(){ Context=Context },
-                                                    new SubOrderByDesc(){ Context=Context }
+                                                    new SubOrderByDesc(){ Context=Context },
+                                                    new SubGroupBy(){ Context=Context}
                                                 };
         }
 
@@ -36,10 +39,11 @@ namespace SqlSugar
             newContext.MappingColumns = context.MappingColumns;
             newContext.MappingTables = context.MappingTables;
             newContext.IgnoreComumnList = context.IgnoreComumnList;
+            newContext.SqlFuncServices = context.SqlFuncServices;
             newContext.Resolve(item, type);
             context.Index = newContext.Index;
             context.ParameterIndex = newContext.ParameterIndex;
-            if (newContext.Parameters.IsValuable())
+            if (newContext.Parameters.HasValue())
                 context.Parameters.AddRange(newContext.Parameters);
             return newContext.Result.GetResultString();
         }

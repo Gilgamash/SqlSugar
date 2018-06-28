@@ -28,7 +28,7 @@ namespace SqlSugar
                     }
                     catch (Exception ex)
                     {
-                        Check.Exception(true, "MySql.Data.dll Nuget更新到 6.10.3-rc 版本的(Core 2.0只支持当前版本), 再检查连接字符串是否正确，{0}", ex.Message);
+                        Check.Exception(true, "MySql.Data.dll Nuget更新到 6.10.4 版本的(Core 2.0只支持当前版本), 再检查连接字符串是否正确，{0}", ex.Message);
                     }
                 }
                 return base._DbConnection;
@@ -48,7 +48,7 @@ namespace SqlSugar
                 }
                 catch (Exception ex)
                 {
-                    Check.Exception(true, "MySql.Data.dll Nuget更新到 6.10.3-rc 版本的(Core 2.0只支持当前版本), 再检查连接字符串是否正确，{0}", ex.Message);
+                    Check.Exception(true, "MySql.Data.dll Nuget更新到 6.10.4 版本的(Core 2.0只支持当前版本), 再检查连接字符串是否正确，{0}", ex.Message);
                 }
             }
         }
@@ -79,7 +79,7 @@ namespace SqlSugar
             {
                 sqlCommand.Transaction = (MySqlTransaction)this.Transaction;
             }
-            if (parameters.IsValuable())
+            if (parameters.HasValue())
             {
                 IDataParameter[] ipars = ToIDbDataParameter(parameters);
                 sqlCommand.Parameters.AddRange((MySqlParameter[])ipars);
@@ -111,8 +111,13 @@ namespace SqlSugar
                 sqlParameter.Value = parameter.Value;
                 sqlParameter.DbType = parameter.DbType;
                 sqlParameter.Direction = parameter.Direction;
+                if (sqlParameter.Direction == 0)
+                {
+                    sqlParameter.Direction = ParameterDirection.Input;
+                }
                 result[index] = sqlParameter;
-                if (sqlParameter.Direction == ParameterDirection.Output) {
+                if (sqlParameter.Direction.IsIn(ParameterDirection.Output, ParameterDirection.InputOutput, ParameterDirection.ReturnValue))
+                {
                     if (this.OutputParameters == null) this.OutputParameters = new List<IDataParameter>();
                     this.OutputParameters.RemoveAll(it => it.ParameterName == sqlParameter.ParameterName);
                     this.OutputParameters.Add(sqlParameter);

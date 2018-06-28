@@ -28,45 +28,49 @@ namespace SqlSugar
         public bool IsAs { get; set; }
 
         #region Core
-        public int ExecuteCommand()
+        public virtual int ExecuteCommand()
         {
             InsertBuilder.IsReturnIdentity = false;
             PreToSql();
+            AutoRemoveDataCache();
             string sql = InsertBuilder.ToSqlString();
             RestoreMapping();
             return Ado.ExecuteCommand(sql, InsertBuilder.Parameters == null ? null : InsertBuilder.Parameters.ToArray());
         }
 
-        public KeyValuePair<string, List<SugarParameter>> ToSql()
+        public virtual KeyValuePair<string, List<SugarParameter>> ToSql()
         {
             InsertBuilder.IsReturnIdentity = true;
             PreToSql();
+            AutoRemoveDataCache();
             string sql = InsertBuilder.ToSqlString();
             RestoreMapping();
             return new KeyValuePair<string, List<SugarParameter>>(sql, InsertBuilder.Parameters);
         }
-        public int ExecuteReturnIdentity()
+        public virtual int ExecuteReturnIdentity()
         {
             InsertBuilder.IsReturnIdentity = true;
             PreToSql();
+            AutoRemoveDataCache();
             string sql = InsertBuilder.ToSqlString();
             RestoreMapping();
             return Ado.GetInt(sql, InsertBuilder.Parameters == null ? null : InsertBuilder.Parameters.ToArray());
         }
-        public long ExecuteReturnBigIdentity()
+        public virtual long ExecuteReturnBigIdentity()
         {
             InsertBuilder.IsReturnIdentity = true;
             PreToSql();
+            AutoRemoveDataCache();
             string sql = InsertBuilder.ToSqlString();
             RestoreMapping();
             return Convert.ToInt64( Ado.GetScalar(sql, InsertBuilder.Parameters == null ? null : InsertBuilder.Parameters.ToArray()));
         }
-        public T ExecuteReturnEntity()
+        public virtual T ExecuteReturnEntity()
         {
             ExecuteCommandIdentityIntoEntity();
             return InsertObjs.First();
         }
-        public bool ExecuteCommandIdentityIntoEntity()
+        public virtual bool ExecuteCommandIdentityIntoEntity()
         {
             var result = InsertObjs.First();
             var identityKeys = GetIdentityKeys();
@@ -89,7 +93,7 @@ namespace SqlSugar
                 IInsertable<T> asyncInsertable = CopyInsertable();
                 return asyncInsertable.ExecuteCommand();
             });
-            result.Start();
+            TaskStart(result);
             return result;
         }
         public Task<int> ExecuteReturnIdentityAsync()
@@ -99,7 +103,7 @@ namespace SqlSugar
                 IInsertable<T> asyncInsertable = CopyInsertable();
                 return asyncInsertable.ExecuteReturnIdentity();
             });
-            result.Start();
+            TaskStart(result);
             return result;
         }
         public Task<T> ExecuteReturnEntityAsync()
@@ -109,7 +113,7 @@ namespace SqlSugar
                 IInsertable<T> asyncInsertable = CopyInsertable();
                 return asyncInsertable.ExecuteReturnEntity();
             });
-            result.Start();
+            TaskStart(result);
             return result;
         }
         public Task<bool> ExecuteCommandIdentityIntoEntityAsync()
@@ -119,7 +123,7 @@ namespace SqlSugar
                 IInsertable<T> asyncInsertable = CopyInsertable();
                 return asyncInsertable.ExecuteCommandIdentityIntoEntity();
             });
-            result.Start();
+            TaskStart(result);
             return result;
         }
         public Task<long> ExecuteReturnBigIdentityAsync()
@@ -129,7 +133,7 @@ namespace SqlSugar
                 IInsertable<T> asyncInsertable = CopyInsertable();
                 return asyncInsertable.ExecuteReturnBigIdentity();
             });
-            result.Start();
+            TaskStart(result);
             return result;
         }
         #endregion
@@ -147,7 +151,7 @@ namespace SqlSugar
         public IInsertable<T> IgnoreColumns(Expression<Func<T, object>> columns)
         {
             var ignoreColumns = InsertBuilder.GetExpressionValue(columns, ResolveExpressType.ArraySingle).GetResultArray().Select(it => this.SqlBuilder.GetNoTranslationColumnName(it)).ToList();
-            this.InsertBuilder.DbColumnInfoList = this.InsertBuilder.DbColumnInfoList.Where(it => !ignoreColumns.Contains(it.PropertyName)).ToList();
+            this.InsertBuilder.DbColumnInfoList = this.InsertBuilder.DbColumnInfoList.Where(it => !ignoreColumns.Any(ig => ig.Equals(it.PropertyName, StringComparison.CurrentCultureIgnoreCase))).ToList();
             return this;
         }
         public IInsertable<T> IgnoreColumns(Func<string, bool> ignoreColumMethod)
@@ -159,7 +163,7 @@ namespace SqlSugar
         public IInsertable<T> InsertColumns(Expression<Func<T, object>> columns)
         {
             var ignoreColumns = InsertBuilder.GetExpressionValue(columns, ResolveExpressType.ArraySingle).GetResultArray().Select(it => this.SqlBuilder.GetNoTranslationColumnName(it)).ToList();
-            this.InsertBuilder.DbColumnInfoList = this.InsertBuilder.DbColumnInfoList.Where(it => ignoreColumns.Contains(it.PropertyName)).ToList();
+            this.InsertBuilder.DbColumnInfoList = this.InsertBuilder.DbColumnInfoList.Where(it => ignoreColumns.Any(ig=>ig.Equals(it.PropertyName,StringComparison.CurrentCultureIgnoreCase))).ToList();
             return this;
         }
 
@@ -184,10 +188,26 @@ namespace SqlSugar
             this.InsertBuilder.IsNoInsertNull = isNoInsertNull;
             return this;
         }
+
+        public IInsertable<T> RemoveDataCache()
+        {
+            var cacheService = this.Context.CurrentConnectionConfig.ConfigureExternalServices.DataInfoCacheService;
+            CacheSchemeMain.RemoveCache(cacheService, this.Context.EntityMaintenance.GetTableName<T>());
+            return this;
+        }
         #endregion
 
-        #region Private Methods
-        private void PreToSql()
+        #region Protected Methods
+        private void AutoRemoveDataCache()
+        {
+            var moreSetts = this.Context.CurrentConnectionConfig.MoreSettings;
+            var extService = this.Context.CurrentConnectionConfig.ConfigureExternalServices;
+            if (moreSetts != null && moreSetts.IsAutoRemoveDataCache && extService != null && extService.DataInfoCacheService != null)
+            {
+                this.RemoveDataCache();
+            }
+        }
+        protected virtual void PreToSql()
         {
             #region Identities
             if (!IsOffIdentity)
@@ -207,6 +227,15 @@ namespace SqlSugar
             if (this.Context.IgnoreColumns != null && this.Context.IgnoreColumns.Any())
             {
                 var currentIgnoreColumns = this.Context.IgnoreColumns.Where(it => it.EntityName == this.EntityInfo.EntityName).ToList();
+                this.InsertBuilder.DbColumnInfoList = this.InsertBuilder.DbColumnInfoList.Where(it =>
+                {
+                    return !currentIgnoreColumns.Any(i => it.PropertyName.Equals(i.PropertyName, StringComparison.CurrentCulture));
+                }).ToList();
+            }
+
+            if (this.Context.IgnoreInsertColumns != null && this.Context.IgnoreInsertColumns.Any())
+            {
+                var currentIgnoreColumns = this.Context.IgnoreInsertColumns.Where(it => it.EntityName == this.EntityInfo.EntityName).ToList();
                 this.InsertBuilder.DbColumnInfoList = this.InsertBuilder.DbColumnInfoList.Where(it =>
                 {
                     return !currentIgnoreColumns.Any(i => it.PropertyName.Equals(i.PropertyName, StringComparison.CurrentCulture));
@@ -235,31 +264,63 @@ namespace SqlSugar
             foreach (var item in InsertObjs)
             {
                 List<DbColumnInfo> insertItem = new List<DbColumnInfo>();
-                foreach (var column in EntityInfo.Columns)
+                if (item is Dictionary<string, object>)
                 {
-                    var columnInfo = new DbColumnInfo()
-                    {
-                        Value = column.PropertyInfo.GetValue(item, null),
-                        DbColumnName = GetDbColumnName(column.PropertyName),
-                        PropertyName = column.PropertyName,
-                        PropertyType = UtilMethods.GetUnderType(column.PropertyInfo),
-                        TableId = i
-                    };
-                    if (columnInfo.PropertyType.IsEnum())
-                    {
-                        columnInfo.Value = Convert.ToInt64(columnInfo.Value);
-                    }
-                    insertItem.Add(columnInfo);
+                    SetInsertItemByDic(i, item, insertItem);
+                }
+                else
+                {
+                    SetInsertItemByEntity(i, item, insertItem);
                 }
                 this.InsertBuilder.DbColumnInfoList.AddRange(insertItem);
                 ++i;
             }
         }
-        private string GetDbColumnName(string entityName)
+        private void SetInsertItemByDic(int i, T item, List<DbColumnInfo> insertItem)
+        {
+            foreach (var column in item as Dictionary<string,object>)
+            {
+                var columnInfo = new DbColumnInfo()
+                {
+                    Value = column.Value,
+                    DbColumnName = column.Key,
+                    PropertyName = column.Key,
+                    PropertyType = UtilMethods.GetUnderType(column.Value.GetType()),
+                    TableId = i
+                };
+                if (columnInfo.PropertyType.IsEnum())
+                {
+                    columnInfo.Value = Convert.ToInt64(columnInfo.Value);
+                }
+                insertItem.Add(columnInfo);
+            }
+        }
+        private void SetInsertItemByEntity(int i, T item, List<DbColumnInfo> insertItem)
+        {
+            foreach (var column in EntityInfo.Columns)
+            {
+                if (column.IsIgnore || column.IsOnlyIgnoreInsert) continue;
+                var columnInfo = new DbColumnInfo()
+                {
+                    Value = column.PropertyInfo.GetValue(item, null),
+                    DbColumnName = GetDbColumnName(column.PropertyName),
+                    PropertyName = column.PropertyName,
+                    PropertyType = UtilMethods.GetUnderType(column.PropertyInfo),
+                    TableId = i
+                };
+                if (columnInfo.PropertyType.IsEnum())
+                {
+                    columnInfo.Value = Convert.ToInt64(columnInfo.Value);
+                }
+                insertItem.Add(columnInfo);
+            }
+        }
+
+        private string GetDbColumnName(string propertyName)
         {
             if (!IsMappingColumns)
             {
-                return entityName;
+                return propertyName;
             }
             if (this.Context.MappingColumns.Any(it => it.EntityName.Equals(EntityInfo.EntityName, StringComparison.CurrentCultureIgnoreCase)))
             {
@@ -267,16 +328,16 @@ namespace SqlSugar
             }
             if (MappingColumnList == null || !MappingColumnList.Any())
             {
-                return entityName;
+                return propertyName;
             }
             else
             {
-                var mappInfo = this.Context.MappingColumns.FirstOrDefault(it => it.PropertyName.Equals(entityName, StringComparison.CurrentCultureIgnoreCase));
-                return mappInfo == null ? entityName : mappInfo.DbColumnName;
+                var mappInfo = this.MappingColumnList.FirstOrDefault(it => it.PropertyName.Equals(propertyName, StringComparison.CurrentCultureIgnoreCase));
+                return mappInfo == null ? propertyName : mappInfo.DbColumnName;
             }
         }
 
-        private List<string> GetPrimaryKeys()
+        protected virtual List<string> GetPrimaryKeys()
         {
             if (this.Context.IsSystemTablesConfig)
             {
@@ -287,7 +348,7 @@ namespace SqlSugar
                 return this.EntityInfo.Columns.Where(it => it.IsPrimarykey).Select(it => it.DbColumnName).ToList();
             }
         }
-        private List<string> GetIdentityKeys()
+        protected virtual List<string> GetIdentityKeys()
         {
             if (this.Context.IsSystemTablesConfig)
             {
@@ -298,16 +359,24 @@ namespace SqlSugar
                 return this.EntityInfo.Columns.Where(it => it.IsIdentity).Select(it => it.DbColumnName).ToList();
             }
         }
-        private void RestoreMapping()
+        private void TaskStart<Type>(Task<Type> result)
+        {
+            if (this.Context.CurrentConnectionConfig.IsShardSameThread)
+            {
+                Check.Exception(true, "IsShardSameThread=true can't be used async method");
+            }
+            result.Start();
+        }
+        protected void RestoreMapping()
         {
             if (IsAs)
             {
                 this.Context.MappingTables = OldMappingTableList;
             }
         }
-        private IInsertable<T> CopyInsertable()
+        protected IInsertable<T> CopyInsertable()
         {
-            var asyncContext = this.Context.Utilities.CopyContext(this.Context,true);
+            var asyncContext = this.Context.Utilities.CopyContext(true);
             asyncContext.CurrentConnectionConfig.IsAutoCloseConnection = true;
 
             var asyncInsertable = asyncContext.Insertable<T>(this.InsertObjs);

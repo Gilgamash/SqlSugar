@@ -24,6 +24,7 @@ namespace OrmTest.Demo
 
             //Only  update  Name 
             var t3 = db.Updateable(updateObj).UpdateColumns(it => new { it.Name }).ExecuteCommand();
+            var t3_0 = db.Updateable(updateObj).UpdateColumns(it => it.SchoolId).ExecuteCommand();
             var t3_1 = db.Updateable(updateObj).UpdateColumns(it => it=="Name").ExecuteCommand();
 
 
@@ -36,6 +37,11 @@ namespace OrmTest.Demo
 
             //Use Lock
             var t6 = db.Updateable(updateObj).With(SqlWith.UpdLock).ExecuteCommand();
+
+            var dt = new Dictionary<string,object>();
+            dt.Add("id", 1);
+            dt.Add("name", "1");
+            var t66 = db.Updateable(dt).AS("student").With(SqlWith.UpdLock).ExecuteCommand();
 
             //update List<T>
             //var t7 = db.Updateable(updateObjs).ExecuteCommand();
@@ -58,6 +64,8 @@ namespace OrmTest.Demo
 
             //Column is null no update
             db.Updateable(updateObj).Where(true).ExecuteCommand();
+
+            db.Updateable(new Student[] { new Student() { Id=2, Name="a2" }, new Student() { Id = 1, Name = "a1" } }).ExecuteCommand();
         }
     }
 }

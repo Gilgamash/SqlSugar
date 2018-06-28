@@ -124,6 +124,27 @@ namespace OrmTest.UnitTest
                         new SugarParameter("@Id0",1),
                         new SugarParameter("@Const1",1)
                     }, t13.Key, t13.Value, "single t13 error ");
+
+
+                var t14 = db.Queryable<Student>()
+                    .Where(it => it.Name == "a" && SqlFunc.HasValue(it.Name)).ToSql();
+                base.Check("SELECT [ID],[SchoolId],[Name],[CreateTime] FROM [STudent]  WHERE (( [Name] = @Name0 ) AND ( [Name]<>'' AND [Name] IS NOT NULL ))",
+                   new List<SugarParameter>() {
+                        new SugarParameter("@Name0","a")
+                   }, t14.Key, t14.Value, "single t14 error ");
+
+
+                var t15 = db.Queryable<CapitalEntity>()
+     .Select(x => new
+     {
+
+         TGYArea = SqlFunc.AggregateSum(SqlFunc.IIF(x.FlatProp == "1", x.Areas, 0))
+     }).ToSql();
+                base.Check("SELECT  SUM(( CASE  WHEN ( [FlatProp] = @FlatProp0 ) THEN [Areas]  ELSE @MethodConst1 END )) AS [TGYArea]  FROM [RENT_CAPITAL] ", new List<SugarParameter>()
+                {
+  new SugarParameter("@FlatProp0","1"),
+  new SugarParameter("@MethodConst1",0)
+                }, t15.Key, t15.Value, "single t15 error");
             }
         }
     }

@@ -40,8 +40,9 @@ namespace OrmTest.Demo
         private static void Subqueryable()
         {
             var db = GetInstance();
-            var getAll11 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Max(s=>s.Id)==1).ToList();
-
+            var i = 0;
+            var getAll11 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Max(s=>s.Id)==i).ToList();
+            var getAll12 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Max(s => s.Id) == 1).ToList();
             var getAll7 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Any()).ToList();
 
             var getAll9 = db.Queryable<Student>().Where(it => SqlFunc.Subqueryable<School>().Where(s => s.Id == it.Id).Count()==1).ToList();
@@ -241,7 +242,8 @@ namespace OrmTest.Demo
         public static void Easy()
         {
             var db = GetInstance();
-            var getAll = db.Queryable<Student>().ToList();
+            var dbTime = db.GetDate();
+            var getAll = db.Queryable<Student>().Select<object>("*").ToList();
             var getAllOrder = db.Queryable<Student>().OrderBy(it => it.Id).OrderBy(it => it.Name, OrderByType.Desc).ToList();
             var getId = db.Queryable<Student>().Select(it => it.Id).ToList();
             var getNew = db.Queryable<Student>().Where(it => it.Id == 1).Select(it => new { id = SqlFunc.IIF(it.Id == 0, 1, it.Id), it.Name, it.SchoolId }).ToList();
@@ -250,6 +252,7 @@ namespace OrmTest.Demo
             var getSingleOrDefault = db.Queryable<Student>().Where(it => it.Id == 1).Single();
             var getFirstOrDefault = db.Queryable<Student>().First();
             var getByWhere = db.Queryable<Student>().Where(it => it.Id == 1 || it.Name == "a").ToList();
+            var getByWhere2 = db.Queryable<Student>().Where(it => it.Id ==DateTime.Now.Year).ToList();
             var getByFuns = db.Queryable<Student>().Where(it => SqlFunc.IsNullOrEmpty(it.Name)).ToList();
             var sum = db.Queryable<Student>().Select(it => it.SchoolId).ToList();
             var sum2 = db.Queryable<Student, School>((st, sc) => st.SchoolId == sc.Id).Sum((st, sc) => sc.Id);
@@ -283,7 +286,17 @@ namespace OrmTest.Demo
 
             var getUnionAllList2 = db.UnionAll(db.Queryable<Student>(), db.Queryable<Student>()).ToList();
 
-            var test1 = db.Queryable<Student, School>((st, sc) => st.SchoolId == sc.Id).Select((st, sc) => SqlFunc.ToInt64(sc.Id)).ToList();
+            var test1 = db.Queryable<Student, School>((st, sc) => st.SchoolId == sc.Id).Where(st=>st.CreateTime>SqlFunc.GetDate()).Select((st, sc) => SqlFunc.ToInt64(sc.Id)).ToList();
+            var test2 = db.Queryable<Student, School>((st, sc) => st.SchoolId == sc.Id)
+                      .Where(st =>
+                        SqlFunc.IF(st.Id > 1)
+                             .Return(st.Id)
+                             .ElseIF(st.Id == 1)
+                             .Return(st.SchoolId).End(st.Id) == 1).Select(st=>st).ToList();
+            var test3 = db.Queryable<DataTestInfo2>().Select(it => it.Bool1).ToSql();
+            var test4 = db.Queryable<DataTestInfo2>().Select(it => new { b=it.Bool1 }).ToSql();
+            DateTime? result = DateTime.Now;
+            var test5 = db.Queryable<Student>().Where(it=>it.CreateTime> result.Value.Date).ToList();
         }
         public static void Page()
         {
@@ -433,6 +446,8 @@ namespace OrmTest.Demo
         {
             var db = GetInstance();
             var t1 = db.Queryable<Student>().Where(it => SqlFunc.ToLower(it.Name) == SqlFunc.ToLower("JACK")).ToList();
+            var t2 = db.Queryable<Student>().Where(it => SqlFunc.IsNull(it.Name,"nullvalue")=="nullvalue").ToList();
+            var t3 = db.Queryable<Student>().Where(it => SqlFunc.MergeString("a",it.Name) == "nullvalue").ToList();
             //SELECT [Id],[SchoolId],[Name],[CreateTime] FROM [Student]  WHERE ((LOWER([Name])) = (LOWER(@MethodConst0)) )
 
             /***More Functions***/
@@ -476,6 +491,7 @@ namespace OrmTest.Demo
             var s2 = db.Queryable<Student>().Select(it => new { id = it.Id, w = new { x = it } }).ToList();
             var s3 = db.Queryable<Student>().Select(it => new { newid = it.Id }).ToList();
             var s4 = db.Queryable<Student>().Select(it => new { newid = it.Id, obj = it }).ToList();
+            var s41 = db.Queryable<Student>().Select<dynamic>("*").ToList();
             var s5 = db.Queryable<Student>().Select(it => new ViewModelStudent2 { Student = it, Name = it.Name }).ToList();
             var s6 = db.Queryable<Student, School>((st, sc) => new object[] {
               JoinType.Left,st.SchoolId==sc.Id
@@ -495,6 +511,9 @@ namespace OrmTest.Demo
             .OrderBy((st, sc) => st.SchoolId)
             .Select((st, sc) => sc)
             .Take(1).ToList();
+
+            var s9 = db.Queryable<Student>().Select(it=>new Student() { Id=it.Id, TestId=1, Name=it.Name, CreateTime=it.CreateTime }).First();
+            var s10 = db.Queryable<Student>().Select(it => new Student() { Id = it.Id}).First();
         }
         private static void Sqlable()
         {

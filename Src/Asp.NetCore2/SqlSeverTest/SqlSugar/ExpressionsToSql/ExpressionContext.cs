@@ -41,6 +41,7 @@ namespace SqlSugar
         public MappingColumnList MappingColumns { get; set; }
         public MappingTableList MappingTables { get; set; }
         public IgnoreColumnList IgnoreComumnList { get; set; }
+        public List<SqlFuncExternal> SqlFuncServices { get; set; }
         public bool IsSingle
         {
             get
@@ -123,6 +124,17 @@ namespace SqlSugar
             copyContext.ParameterIndex = this.ParameterIndex;
             return copyContext;
         }
+        public ExpressionContext GetCopyContextWithMapping()
+        {
+            ExpressionContext copyContext = (ExpressionContext)Activator.CreateInstance(this.GetType(), true);
+            copyContext.Index = this.Index;
+            copyContext.ParameterIndex = this.ParameterIndex;
+            copyContext.MappingColumns = this.MappingColumns;
+            copyContext.MappingTables = this.MappingTables;
+            copyContext.IgnoreComumnList = this.IgnoreComumnList;
+            copyContext.SqlFuncServices = this.SqlFuncServices;
+            return copyContext;
+        }
         #endregion
 
         #region Override methods
@@ -130,7 +142,7 @@ namespace SqlSugar
         {
             Check.ArgumentNullException(entityName, string.Format(ErrorMessage.ObjNotExist, "Table Name"));
             if (IsTranslationText(entityName)) return entityName;
-            isMapping = isMapping && this.MappingTables.IsValuable();
+            isMapping = isMapping && this.MappingTables.HasValue();
             var isComplex = entityName.Contains(UtilConstants.Dot);
             if (isMapping && isComplex)
             {
@@ -175,7 +187,7 @@ namespace SqlSugar
         }
         public virtual string GetDbColumnName(string entityName, string propertyName)
         {
-            if (this.MappingColumns.IsValuable())
+            if (this.MappingColumns.HasValue())
             {
                 var mappingInfo = this.MappingColumns.SingleOrDefault(it => it.EntityName == entityName && it.PropertyName == propertyName);
                 return mappingInfo == null ? propertyName : mappingInfo.DbColumnName;

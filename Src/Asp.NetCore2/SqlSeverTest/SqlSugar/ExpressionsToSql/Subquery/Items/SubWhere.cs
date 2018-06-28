@@ -8,6 +8,11 @@ namespace SqlSugar
 {
     public class SubWhere: ISubOperation
     {
+        public bool HasWhere
+        {
+            get; set;
+        }
+
         public string Name
         {
             get { return "Where"; }
@@ -35,7 +40,7 @@ namespace SqlSugar
         {
             var exp = expression as MethodCallExpression;
             var argExp= exp.Arguments[0];
-            var result= "WHERE "+SubTools.GetMethodValue(Context, argExp, ResolveExpressType.WhereMultiple);;
+            var result= "WHERE "+SubTools.GetMethodValue(Context, argExp, ResolveExpressType.WhereMultiple);
             var selfParameterName = Context.GetTranslationColumnName((argExp as LambdaExpression).Parameters.First().Name)+UtilConstants.Dot;
             result = result.Replace(selfParameterName,string.Empty);
             return result;

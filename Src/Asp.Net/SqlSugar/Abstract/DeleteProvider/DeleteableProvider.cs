@@ -28,7 +28,12 @@ namespace SqlSugar
             string sql = DeleteBuilder.ToSqlString();
             var paramters = DeleteBuilder.Parameters == null ? null : DeleteBuilder.Parameters.ToArray();
             RestoreMapping();
+            AutoRemoveDataCache();
             return Db.ExecuteCommand(sql, paramters);
+        }
+        public bool ExecuteCommandHasChange()
+        {
+            return ExecuteCommand() > 0;
         }
         public Task<int> ExecuteCommandAsync()
         {
@@ -37,7 +42,18 @@ namespace SqlSugar
                 IDeleteable<T> asyncDeleteable = CopyDeleteable();
                 return asyncDeleteable.ExecuteCommand();
             });
-            result.Start();
+            TaskStart(result);
+            return result;
+        }
+
+        public Task<bool> ExecuteCommandHasChangeAsync()
+        {
+            Task<bool> result = new Task<bool>(() =>
+            {
+                IDeleteable<T> asyncDeleteable = CopyDeleteable();
+                return asyncDeleteable.ExecuteCommand() > 0;
+            });
+            TaskStart(result);
             return result;
         }
         public IDeleteable<T> AS(string tableName)
@@ -60,7 +76,7 @@ namespace SqlSugar
             string tableName = this.Context.EntityMaintenance.GetTableName<T>();
             var primaryFields = this.GetPrimaryKeys();
             var isSinglePrimaryKey = primaryFields.Count == 1;
-            Check.ArgumentNullException(primaryFields, string.Format("Table {0} with no primarykey", tableName));
+            Check.Exception(primaryFields.IsNullOrEmpty(), string.Format("Table {0} with no primarykey", tableName));
             if (isSinglePrimaryKey)
             {
                 List<object> primaryKeyValues = new List<object>();
@@ -92,7 +108,7 @@ namespace SqlSugar
                 {
                     StringBuilder orString = new StringBuilder();
                     var isFirst = deleteObjs.IndexOf(deleteObj) == 0;
-                    if (isFirst)
+                    if (!isFirst)
                     {
                         orString.Append(DeleteBuilder.WhereInOrTemplate + UtilConstants.Space);
                     }
@@ -100,12 +116,19 @@ namespace SqlSugar
                     StringBuilder andString = new StringBuilder();
                     foreach (var primaryField in primaryFields)
                     {
-                        if (i == 0)
+                        if (i != 0)
                             andString.Append(DeleteBuilder.WhereInAndTemplate + UtilConstants.Space);
                         var entityPropertyName = this.Context.EntityMaintenance.GetPropertyName<T>(primaryField);
                         var columnInfo = EntityInfo.Columns.Single(it => it.PropertyName == entityPropertyName);
                         var entityValue = columnInfo.PropertyInfo.GetValue(deleteObj, null);
-                        andString.AppendFormat(DeleteBuilder.WhereInEqualTemplate, primaryField, entityValue);
+                        if (this.Context.CurrentConnectionConfig.DbType == DbType.Oracle)
+                        {
+                            andString.AppendFormat(DeleteBuilder.WhereInEqualTemplate, primaryField.ToUpper(), entityValue);
+                        }
+                        else
+                        {
+                            andString.AppendFormat(DeleteBuilder.WhereInEqualTemplate, primaryField, entityValue);
+                        }
                         ++i;
                     }
                     orString.AppendFormat(DeleteBuilder.WhereInAreaTemplate, andString);
@@ -159,6 +182,14 @@ namespace SqlSugar
             DeleteBuilder.Parameters.AddRange(parameters);
             return this;
         }
+
+        public IDeleteable<T> RemoveDataCache()
+        {
+            var cacheService = this.Context.CurrentConnectionConfig.ConfigureExternalServices.DataInfoCacheService;
+            CacheSchemeMain.RemoveCache(cacheService, this.Context.EntityMaintenance.GetTableName<T>());
+            return this;
+        }
+
         public IDeleteable<T> In<PkType>(List<PkType> primaryKeyValues)
         {
             if (primaryKeyValues == null || primaryKeyValues.Count() == 0)
@@ -188,7 +219,7 @@ namespace SqlSugar
             {
                 if (DeleteBuilder.BigDataInValues == null)
                     DeleteBuilder.BigDataInValues = new List<object>();
-                DeleteBuilder.BigDataInValues.AddRange(primaryKeyValues.Select(it=>(object)it));
+                DeleteBuilder.BigDataInValues.AddRange(primaryKeyValues.Select(it => (object)it));
                 DeleteBuilder.BigDataFiled = primaryField;
             }
             return this;
@@ -248,7 +279,27 @@ namespace SqlSugar
             }
         }
 
-        private IDeleteable<T> CopyDeleteable() {
+        private void TaskStart<Type>(Task<Type> result)
+        {
+            if (this.Context.CurrentConnectionConfig.IsShardSameThread) {
+                Check.Exception(true, "IsShardSameThread=true can't be used async method");
+            }
+            result.Start();
+        }
+
+        private void AutoRemoveDataCache()
+        {
+            var moreSetts = this.Context.CurrentConnectionConfig.MoreSettings;
+            var extService = this.Context.CurrentConnectionConfig.ConfigureExternalServices;
+            if (moreSetts != null && moreSetts.IsAutoRemoveDataCache && extService != null && extService.DataInfoCacheService != null)
+            {
+                this.RemoveDataCache();
+            }
+        }
+
+
+        private IDeleteable<T> CopyDeleteable()
+        {
             var asyncContext = this.Context.Utilities.CopyContext(true);
             asyncContext.CurrentConnectionConfig.IsAutoCloseConnection = true;
 
