@@ -44,7 +44,7 @@ namespace SqlSugar
             }
             else
             {
-                var type = value.GetType();
+                var type = UtilMethods.GetUnderType(value.GetType());
                 if (type == UtilConstants.DateType)
                 {
                     var date = value.ObjToDate();
@@ -60,7 +60,7 @@ namespace SqlSugar
                 }
                 else if (type == UtilConstants.ByteArrayType)
                 {
-                    string bytesString = "0x" + BitConverter.ToString((byte[])value);
+                    string bytesString = "0x" + BitConverter.ToString((byte[])value).Replace("-", "");
                     return bytesString;
                 }
                 else if (type == UtilConstants.BoolType)

@@ -48,7 +48,7 @@ namespace SqlSugar
                     throw new NotSupportedException();
                 }
                 MemberAssignment memberAssignment = (MemberAssignment)binding;
-                var type = memberAssignment.Member.ReflectedType;
+                var type = expression.Type;
                 var memberName = this.Context.GetDbColumnName(type.Name, memberAssignment.Member.Name);
                 var item = memberAssignment.Expression;
                 if ((item is MemberExpression) && ((MemberExpression)item).Expression == null)
@@ -57,11 +57,60 @@ namespace SqlSugar
                     string parameterName = AppendParameter(paramterValue);
                     this.Context.Result.Append(base.Context.GetEqString(memberName, parameterName));
                 }
+                else if (IsNotMember(item))
+                {
+                    if (base.Context.Result.IsLockCurrentParameter == false)
+                    {
+                        base.Context.Result.CurrentParameter = parameter;
+                        base.Context.Result.IsLockCurrentParameter = true;
+                        parameter.IsAppendTempDate();
+                        base.Expression = item;
+                        base.Expression = (item as UnaryExpression).Operand;
+                        base.Start();
+                        parameter.IsAppendResult();
+                        var result = this.Context.DbMehtods.IIF(new MethodCallExpressionModel()
+                        {
+                            Args = new List<MethodCallExpressionArgs>() {
+                                  new MethodCallExpressionArgs(){ IsMember=true, MemberName=parameter.CommonTempData.ObjToString()+"=1" },
+                                  new MethodCallExpressionArgs(){ IsMember=true,MemberName=AppendParameter(0)  },
+                                  new MethodCallExpressionArgs(){ IsMember=true, MemberName=AppendParameter(1)  }
+                           }
+                        });
+                        parameter.Context.Result.Append(base.Context.GetEqString(memberName, result));
+                        base.Context.Result.CurrentParameter = null;
+                    }
+                }
+                else if (IsNotParameter(item))
+                {
+                    try
+                    {
+                        parameter.Context.Result.Append(base.Context.GetEqString(memberName,AppendParameter(ExpressionTool.DynamicInvoke(item).ObjToBool())));
+                    }
+                    catch  
+                    {
+                        throw new NotSupportedException(item.ToString());
+                    }
+                }
                 else if (IsMethod(item))
                 {
                     if (item is UnaryExpression)
                         item = (item as UnaryExpression).Operand;
-                    MethodCall(parameter, memberName, item);
+                    var callMethod = item as MethodCallExpression;
+                    if (MethodTimeMapping.Any(it => it.Key == callMethod.Method.Name) || MethodMapping.Any(it => it.Key == callMethod.Method.Name) || IsExtMethod(callMethod.Method.Name) || IsSubMethod(callMethod) || callMethod.Method.DeclaringType.FullName.StartsWith(UtilConstants.AssemblyName + UtilConstants.Dot))
+                    {
+                        MethodCall(parameter, memberName, item);
+                    }
+                    else
+                    {
+                        var paramterValue = ExpressionTool.DynamicInvoke(item);
+                        string parameterName = AppendParameter(paramterValue);
+                        this.Context.Result.Append(base.Context.GetEqString(memberName, parameterName));
+                    }
+                }
+                else if (IsConst(item)&&IsConvert(item)&&UtilMethods.IsNullable(item.Type) && UtilMethods.GetUnderType(item.Type)==UtilConstants.BoolType)
+                {
+                    item = (item as UnaryExpression).Operand;
+                    parameter.Context.Result.Append(base.Context.GetEqString(memberName, GetNewExpressionValue(item)));
                 }
                 else if (IsConst(item))
                 {
@@ -91,9 +140,34 @@ namespace SqlSugar
                     var result = GetNewExpressionValue(item);
                     this.Context.Result.Append(base.Context.GetEqString(memberName, result));
                 }
+                else if (item is MemberInitExpression)
+                {
+                    try
+                    {
+                        var value = ExpressionTool.DynamicInvoke(item);
+                        var parameterName = AppendParameter(value);
+                        parameter.Context.Result.Append(base.Context.GetEqString(memberName, parameterName));
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new NotSupportedException("Not Supported " + item.ToString() + " " + ex.Message);
+                    }
+                }
+                else if (item is NewExpression)
+                {
+                    try
+                    {
+                        var value = ExpressionTool.DynamicInvoke(item);
+                        var parameterName = AppendParameter(value);
+                        parameter.Context.Result.Append(base.Context.GetEqString(memberName, parameterName));
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new NotSupportedException("Not Supported " + item.ToString() + " " + ex.Message);
+                    }
+                }
             }
         }
-
         private static bool IsConst(Expression item)
         {
             return item is UnaryExpression || item.NodeType == ExpressionType.Constant || (item is MemberExpression) && ((MemberExpression)item).Expression.NodeType == ExpressionType.Constant;
@@ -114,8 +188,20 @@ namespace SqlSugar
                     base.Expression = item;
                     base.Start();
                     var subSql = base.Context.GetEqString(memberName, parameter.CommonTempData.ObjToString());
-                    if (ResolveExpressType.Update == this.Context.ResolveType) {
-                        subSql = Regex.Replace(subSql,@" \[\w+?\]\.",this.Context.GetTranslationTableName(parameter.CurrentExpression.Type.Name,true) +".");
+                    if (subSql.Contains(",")) {
+                        subSql = subSql.Replace(",", UtilConstants.ReplaceCommaKey);
+                    }
+                    if (ResolveExpressType.Update == this.Context.ResolveType)
+                    {
+                        string name = this.Context.GetTranslationTableName(parameter.CurrentExpression.Type.Name, true);
+                        if (name.Contains("."))
+                        {
+
+                        }
+                        else
+                        {
+                            subSql = Regex.Replace(subSql, @" \[\w+?\]\.| ""\w+?""\.| \`\w+?\`\.", name + ".");
+                        }
                     }
                     parameter.Context.Result.Append(subSql);
                 });        
@@ -124,7 +210,7 @@ namespace SqlSugar
             {
                 base.Expression = item;
                 base.Start();
-                parameter.Context.Result.Append(base.Context.GetEqString(memberName, parameter.CommonTempData.ObjToString()));
+                parameter.Context.Result.Append(base.Context.GetEqString(memberName, parameter.CommonTempData.ObjToString().Replace(",", UtilConstants.ReplaceCommaKey)));
             }
         }
 
@@ -143,9 +229,23 @@ namespace SqlSugar
             }
         }
 
-        private bool IsSubMethod(MethodCallExpression express)
+        //private bool IsSubMethod(MethodCallExpression express)
+        //{
+        //    return SubTools.SubItemsConst.Any(it =>express.Object != null && express.Object.Type.Name == "Subqueryable`1");
+        //}
+        private bool IsExtMethod(string methodName)
         {
-            return SubTools.SubItemsConst.Any(it =>express.Object != null && express.Object.Type.Name == "Subqueryable`1");
+            if (this.Context.SqlFuncServices == null) return false;
+            return this.Context.SqlFuncServices.Select(it => it.UniqueMethodName).Contains(methodName);
+        }
+        private bool CheckMethod(MethodCallExpression expression)
+        {
+            if (IsExtMethod(expression.Method.Name))
+                return true;
+            if (expression.Method.ReflectedType().FullName != ExpressionConst.SqlFuncFullName)
+                return false;
+            else
+                return true;
         }
     }
 }

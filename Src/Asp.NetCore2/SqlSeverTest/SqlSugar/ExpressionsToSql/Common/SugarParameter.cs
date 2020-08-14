@@ -25,20 +25,49 @@ namespace SqlSugar
             this.ParameterName = name;
             SettingDataType(type);
         }
-        public SugarParameter(string name, object value, Type type,ParameterDirection direction)
+        public SugarParameter(string name, object value, Type type, ParameterDirection direction)
         {
             this.Value = value;
             this.ParameterName = name;
             this.Direction = direction;
             SettingDataType(type);
         }
-        public SugarParameter(string name, object value, Type type, ParameterDirection direction,int size)
+        public SugarParameter(string name, object value, Type type, ParameterDirection direction, int size)
         {
             this.Value = value;
             this.ParameterName = name;
             this.Direction = direction;
             this.Size = size;
             SettingDataType(type);
+        }
+
+
+        public SugarParameter(string name, object value, System.Data.DbType type)
+        {
+            this.Value = value;
+            this.ParameterName = name;
+            this.DbType = type;
+        }
+        public SugarParameter(string name, DataTable value, string SqlServerTypeName)
+        {
+            this.Value = value;
+            this.ParameterName = name;
+            this.TypeName = SqlServerTypeName;
+        }
+        public SugarParameter(string name, object value, System.Data.DbType type, ParameterDirection direction)
+        {
+            this.Value = value;
+            this.ParameterName = name;
+            this.Direction = direction;
+            this.DbType = type;
+        }
+        public SugarParameter(string name, object value, System.Data.DbType type, ParameterDirection direction, int size)
+        {
+            this.Value = value;
+            this.ParameterName = name;
+            this.Direction = direction;
+            this.Size = size;
+            this.DbType = type;
         }
 
         private void SettingDataType(Type type)
@@ -90,6 +119,19 @@ namespace SqlSugar
             else if (type == UtilConstants.StringType)
             {
                 this.DbType = System.Data.DbType.String;
+            }
+            else if (type == UtilConstants.DateTimeOffsetType)
+            {
+                this.DbType = System.Data.DbType.DateTimeOffset;
+            }
+            else if (type == UtilConstants.TimeSpanType)
+            {
+                if (this.Value != null)
+                    this.Value = this.Value.ToString();
+            }
+            else if (type.IsEnum())
+            {
+                this.DbType = System.Data.DbType.Int64;
             }
 
         }
@@ -188,5 +230,8 @@ namespace SqlSugar
         {
             this.DbType = System.Data.DbType.String;
         }
+
+
+        public string TypeName { get; set; }
     }
 }

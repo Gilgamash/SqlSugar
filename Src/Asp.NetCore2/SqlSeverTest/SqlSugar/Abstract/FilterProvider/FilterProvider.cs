@@ -7,14 +7,22 @@ namespace SqlSugar
 {
     public class QueryFilterProvider : IFilter
     {
-        internal SqlSugarClient Context { get; set; }
+        internal SqlSugarProvider Context { get; set; }
         private List<SqlFilterItem> _Filters { get; set; }
 
         public IFilter Add(SqlFilterItem filter)
         {
             if (_Filters == null)
                 _Filters = new List<SqlFilterItem>();
-            _Filters.Add(filter);
+            if (this.Context.CurrentConnectionConfig.IsShardSameThread)
+            {
+                if (!_Filters.Select(it => it.FilterValue(this.Context).Sql).Contains(filter.FilterValue(this.Context).Sql))
+                    _Filters.Add(filter);
+            }
+            else
+            {
+                _Filters.Add(filter);
+            }
             return this;
         }
 

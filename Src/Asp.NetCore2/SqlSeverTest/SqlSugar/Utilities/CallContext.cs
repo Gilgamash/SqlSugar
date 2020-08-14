@@ -10,6 +10,6 @@ namespace SqlSugar
 {
     internal class CallContext
     {
-        public static ThreadLocal<List<SqlSugarClient>> ContextList = new ThreadLocal<List<SqlSugarClient>>();
+        public static ThreadLocal<List<SqlSugarProvider>> ContextList = new ThreadLocal<List<SqlSugarProvider>>();
     }
 }

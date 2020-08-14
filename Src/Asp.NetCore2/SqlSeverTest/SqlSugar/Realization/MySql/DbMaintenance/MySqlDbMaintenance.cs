@@ -8,6 +8,13 @@ namespace SqlSugar
     public class MySqlDbMaintenance : DbMaintenanceProvider
     {
         #region DML
+        protected override string GetDataBaseSql
+        {
+            get
+            {
+                return "SHOW DATABASES";
+            }
+        }
         protected override string GetColumnInfosByTableNameSql
         {
             get
@@ -50,6 +57,13 @@ namespace SqlSugar
         #endregion
 
         #region DDL
+        protected override string CreateDataBaseSql
+        {
+            get
+            {
+                return "CREATE DATABASE {0}";
+            }
+        }
         protected override string AddPrimaryKeySql
         {
             get
@@ -104,7 +118,7 @@ namespace SqlSugar
         {
             get
             {
-                return "SELECT  *　INTO {1} FROM  {2} limit 0,{0}";
+                return "Create table {1} (Select * from {2} LIMIT 0,{0})";
             }
         }
         protected override string DropTableSql
@@ -132,7 +146,7 @@ namespace SqlSugar
         {
             get
             {
-                return "exec sp_rename '{0}.{1}','{2}','column';";
+                return "alter table {0} change  column {1} {2}";
             }
         }
         #endregion
@@ -176,9 +190,122 @@ namespace SqlSugar
                 return "AUTO_INCREMENT";
             }
         }
+
+        protected override string AddColumnRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string DeleteColumnRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string IsAnyColumnRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string AddTableRemarkSql
+        {
+            get
+            {
+                 return "ALTER TABLE {0} COMMENT='{1}';";
+            }
+        }
+
+        protected override string DeleteTableRemarkSql
+        {
+            get
+            {
+                return "ALTER TABLE {0} COMMENT='';";
+            }
+        }
+
+        protected override string IsAnyTableRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string RenameTableSql {
+            get
+            {
+                return "alter table {0} rename {1}";
+            }
+        }
+
+        protected override string CreateIndexSql
+        {
+            get
+            {
+                return "CREATE INDEX Index_{0}_{2} ON {0} ({1})";
+            }
+        }
+
+        protected override string AddDefaultValueSql
+        {
+            get
+            {
+                return "ALTER TABLE {0} ALTER COLUMN {1} SET DEFAULT '{2}'";
+            }
+        }
+        protected override string IsAnyIndexSql
+        {
+            get
+            {
+                return "SELECT count(*) FROM information_schema.statistics WHERE index_name = '{0}'";
+            }
+        }
         #endregion
 
         #region Methods
+        /// <summary>
+        ///by current connection string
+        /// </summary>
+        /// <param name="databaseDirectory"></param>
+        /// <returns></returns>
+        public override bool CreateDatabase(string databaseName, string databaseDirectory = null)
+        {
+            if (databaseDirectory != null)
+            {
+                if (!FileHelper.IsExistDirectory(databaseDirectory))
+                {
+                    FileHelper.CreateDirectory(databaseDirectory);
+                }
+            }
+            var oldDatabaseName = this.Context.Ado.Connection.Database;
+            var connection = this.Context.CurrentConnectionConfig.ConnectionString;
+            connection = connection.Replace(oldDatabaseName, "mysql");
+            var newDb = new SqlSugarClient(new ConnectionConfig()
+            {
+                DbType = this.Context.CurrentConnectionConfig.DbType,
+                IsAutoCloseConnection = true,
+                ConnectionString = connection
+            });
+            if (!GetDataBaseList(newDb).Any(it => it.Equals(databaseName, StringComparison.CurrentCultureIgnoreCase)))
+            {
+                newDb.Ado.ExecuteCommand(string.Format(CreateDataBaseSql, databaseName, databaseDirectory));
+            }
+            return true;
+        }
+        public override bool AddTableRemark(string tableName, string description)
+        {
+            string sql = string.Format(this.AddTableRemarkSql, this.SqlBuilder.GetTranslationTableName(tableName), description);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
         public override bool CreateTable(string tableName, List<DbColumnInfo> columns, bool isCreatePrimaryKey = true)
         {
             if (columns.HasValue())
@@ -199,6 +326,22 @@ namespace SqlSugar
             }
             sql = sql.Replace("$PrimaryKey", primaryKeyInfo);
             this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public override bool AddRemark(EntityInfo entity)
+        {
+            var db = this.Context;
+            db.DbMaintenance.AddTableRemark(entity.DbTableName, entity.TableDescription);
+            List<EntityColumnInfo> columns = entity.Columns.Where(it => it.IsIgnore == false).ToList();
+            foreach (var item in columns)
+            {
+                if (item.ColumnDescription != null)
+                {
+                    var mySqlCodeFirst = this.Context.CodeFirst as MySqlCodeFirst;
+                    string sql = GetUpdateColumnSql(entity.DbTableName, mySqlCodeFirst.GetEntityColumnToDbColumn(entity, entity.DbTableName, item))+" "+(item.IsIdentity? "AUTO_INCREMENT" : "")+" " + " COMMENT '" + item.ColumnDescription + "'";
+                    db.Ado.ExecuteCommand(sql);
+                }
+            }
             return true;
         }
         protected override string GetCreateTableSql(string tableName, List<DbColumnInfo> columns)
@@ -246,6 +389,62 @@ namespace SqlSugar
             return dataSize;
         }
 
+        public override bool RenameColumn(string tableName, string oldColumnName, string newColumnName)
+        {
+            var columns=GetColumnInfosByTableName(tableName).Where(it=>it.DbColumnName.Equals(oldColumnName,StringComparison.CurrentCultureIgnoreCase));
+            if (columns != null && columns.Any())
+            {
+                var column = columns.First();
+                var appendSql = " " + column.DataType;
+                if (column.Length > 0 && column.Scale == 0)
+                {
+                    appendSql += string.Format("({0}) ", column.Length);
+                }
+                else if (column.Scale > 0 && column.Length > 0)
+                {
+                    appendSql += string.Format("({0},{1}) ", column.Length, column.Scale);
+                }
+                else
+                {
+                    appendSql += column.IsNullable ? " NULL " : " NOT NULL ";
+                }
+                tableName = this.SqlBuilder.GetTranslationTableName(tableName);
+                oldColumnName = this.SqlBuilder.GetTranslationColumnName(oldColumnName);
+                newColumnName = this.SqlBuilder.GetTranslationColumnName(newColumnName);
+                string sql = string.Format(this.RenameColumnSql, tableName, oldColumnName, newColumnName+appendSql);
+                this.Context.Ado.ExecuteCommand(sql);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        public override bool AddDefaultValue(string tableName, string columnName, string defaultValue)
+        {
+            if (defaultValue == "''")
+            {
+                defaultValue = "";
+            }
+            if (defaultValue.ToLower().IsIn("now()", "current_timestamp"))
+            {
+                string template = "ALTER table {0} CHANGE COLUMN {1} {1} {3} default {2}";
+                var dbColumnInfo = this.Context.DbMaintenance.GetColumnInfosByTableName(tableName).First(it => it.DbColumnName.Equals(columnName, StringComparison.CurrentCultureIgnoreCase));
+                string sql = string.Format(template, tableName, columnName, defaultValue, dbColumnInfo.DataType);
+                this.Context.Ado.ExecuteCommand(sql);
+                return true;
+            }
+            else if (defaultValue=="0"|| defaultValue == "1")
+            {
+                string sql = string.Format(AddDefaultValueSql.Replace("'",""), tableName, columnName, defaultValue);
+                this.Context.Ado.ExecuteCommand(sql);
+                return true;
+            }
+            else
+            {
+                return base.AddDefaultValue(tableName, columnName, defaultValue);
+            }
+        }
         public override bool IsAnyConstraint(string constraintName)
         {
             throw new NotSupportedException("MySql IsAnyConstraint NotSupportedException");
@@ -255,6 +454,7 @@ namespace SqlSugar
             Check.ThrowNotSupportedException("MySql BackupDataBase NotSupported");
             return false;
         }
+
         #endregion
     }
 }

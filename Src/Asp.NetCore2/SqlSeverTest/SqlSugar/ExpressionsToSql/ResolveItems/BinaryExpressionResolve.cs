@@ -32,11 +32,27 @@ namespace SqlSugar
             {
                 base.Context.Result.Replace(ExpressionConst.FormatSymbol, ExpressionConst.LeftParenthesis + ExpressionConst.FormatSymbol);
             }
+            if (leftExpression is UnaryExpression && (leftExpression as UnaryExpression).Operand is UnaryExpression&& (leftExpression as UnaryExpression).NodeType == ExpressionType.Convert)
+            {
+                leftExpression = (leftExpression as UnaryExpression).Operand;
+            }
+            if (leftExpression is UnaryExpression && (leftExpression as UnaryExpression).Operand.Type == UtilConstants.BoolType && (leftExpression as UnaryExpression).NodeType == ExpressionType.Convert&&rightExpression.Type==UtilConstants.BoolTypeNull)
+            {
+                leftExpression = (leftExpression as UnaryExpression).Operand;
+            }
+            if (rightExpression is UnaryExpression&& (rightExpression as UnaryExpression).Operand.Type==UtilConstants.BoolType&& (rightExpression as UnaryExpression).NodeType == ExpressionType.Convert)
+            {
+                rightExpression = (rightExpression as UnaryExpression).Operand;
+            }
             parameter.LeftExpression = leftExpression;
             parameter.RightExpression = rightExpression;
             base.Expression = leftExpression;
             base.IsLeft = true;
             base.Start();
+            if (leftExpression is UnaryExpression && leftExpression.Type == UtilConstants.BoolType&&!this.Context.Result.Contains(ExpressionConst.ExpressionReplace))
+            {
+                this.Context.Result.AppendFormat(" {0} ", ExpressionTool.GetOperator(expression.NodeType));
+            }
             base.IsLeft = false;
             base.Expression = rightExpression;
             base.Start();
@@ -44,7 +60,7 @@ namespace SqlSugar
             if (lsbs && parameter.ValueIsNull)
             {
                 base.Context.Result.Replace(ExpressionConst.ExpressionReplace + parameter.Index, isEqual ? "IS" : "IS NOT");
-                base.Context.Result.Replace(ExpressionConst.ExpressionReplace + (parameter.Index+1), isEqual ? "IS" : "IS NOT");
+                base.Context.Result.Replace(ExpressionConst.ExpressionReplace + (parameter.Index + 1), isEqual ? "IS" : "IS NOT");
             }
             else
             {

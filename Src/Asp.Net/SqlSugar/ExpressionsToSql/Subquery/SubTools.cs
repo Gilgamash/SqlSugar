@@ -15,7 +15,9 @@ namespace SqlSugar
                                                 {
                                                     new SubSelect() { Context=Context },
                                                     new SubWhere(){ Context=Context },
+                                                    new SubWhereIF(){ Context=Context },
                                                     new SubAnd(){ Context=Context },
+                                                    new SubAndIF(){ Context=Context },
                                                     new SubAny(){ Context=Context },
                                                     new SubNotAny(){ Context=Context },
                                                     new SubBegin(){ Context=Context },
@@ -31,6 +33,14 @@ namespace SqlSugar
                                                 };
         }
 
+        public static string GetSubReplace(ExpressionContext context)
+        {
+            if (context.SubQueryIndex == 0)
+                return string.Empty;
+            else
+                return "subTableIndex"+context.SubQueryIndex+".";
+        }
+
         public static List<ISubOperation> SubItemsConst = SubItems(null);
 
         public static string GetMethodValue(ExpressionContext context, Expression item, ResolveExpressType type)
@@ -38,6 +48,8 @@ namespace SqlSugar
             var newContext = context.GetCopyContext();
             newContext.MappingColumns = context.MappingColumns;
             newContext.MappingTables = context.MappingTables;
+            newContext.InitMappingInfo = context.InitMappingInfo;
+            newContext.RefreshMapping = context.RefreshMapping;
             newContext.IgnoreComumnList = context.IgnoreComumnList;
             newContext.SqlFuncServices = context.SqlFuncServices;
             newContext.Resolve(item, type);

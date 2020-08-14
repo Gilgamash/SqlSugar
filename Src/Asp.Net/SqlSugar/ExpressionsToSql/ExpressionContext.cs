@@ -35,6 +35,7 @@ namespace SqlSugar
                 _DbMehtods = value;
             }
         }
+        public int SubQueryIndex { get; set; }
         public int Index { get; set; }
         public int ParameterIndex { get; set; }
         public string SingleTableNameSubqueryShortName{ get;  set; }
@@ -121,6 +122,8 @@ namespace SqlSugar
         {
             ExpressionContext copyContext = (ExpressionContext)Activator.CreateInstance(this.GetType(), true);
             copyContext.Index = this.Index;
+            copyContext.InitMappingInfo = this.InitMappingInfo;
+            copyContext.RefreshMapping = this.RefreshMapping;
             copyContext.ParameterIndex = this.ParameterIndex;
             return copyContext;
         }
@@ -133,6 +136,8 @@ namespace SqlSugar
             copyContext.MappingTables = this.MappingTables;
             copyContext.IgnoreComumnList = this.IgnoreComumnList;
             copyContext.SqlFuncServices = this.SqlFuncServices;
+            copyContext.InitMappingInfo = this.InitMappingInfo;
+            copyContext.RefreshMapping = this.RefreshMapping;
             return copyContext;
         }
         #endregion
@@ -157,7 +162,15 @@ namespace SqlSugar
             else if (isMapping)
             {
                 var mappingInfo = this.MappingTables.FirstOrDefault(it => it.EntityName.Equals(entityName, StringComparison.CurrentCultureIgnoreCase));
-                return SqlTranslationLeft + (mappingInfo == null ? entityName : mappingInfo.DbTableName) + SqlTranslationRight;
+                var name = (mappingInfo == null ? entityName : mappingInfo.DbTableName);
+                if (name.Contains("."))
+                {
+                    return string.Join(".", name.Split('.').Select(it => SqlTranslationLeft + it + SqlTranslationRight));
+                }
+                else
+                {
+                    return SqlTranslationLeft + name + SqlTranslationRight;
+                }
             }
             else if (isComplex)
             {

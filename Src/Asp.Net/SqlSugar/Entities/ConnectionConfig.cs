@@ -2,12 +2,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 namespace SqlSugar
 {
     public class ConnectionConfig
     {
+        /// <summary>
+        /// 
+        /// </summary>
+        public dynamic ConfigId { get; set; }
         /// <summary>
         ///DbType.SqlServer Or Other
         /// </summary>
@@ -32,8 +37,7 @@ namespace SqlSugar
         /// Configure External Services replace default services,For example, Redis storage
         /// </summary>
         [JsonIgnore]
-        public ConfigureExternalServices ConfigureExternalServices = _DefaultServices;
-        private static ConfigureExternalServices _DefaultServices = new ConfigureExternalServices();
+        public ConfigureExternalServices ConfigureExternalServices = new ConfigureExternalServices();
         /// <summary>
         /// If SlaveConnectionStrings has value,ConnectionString is write operation, SlaveConnectionStrings is read operation.
         /// All operations within a transaction is ConnectionString
@@ -43,14 +47,41 @@ namespace SqlSugar
         /// More Gobal Settings
         /// </summary>
         public ConnMoreSettings MoreSettings { get; set; }
-    }
+        /// <summary>
+        /// Used for debugging errors or BUG,Used for debugging, which has an impact on Performance
+        /// </summary>
+        public SugarDebugger Debugger { get; set; }
 
+        [JsonIgnore]
+        public AopEvents AopEvents { get;set; }
+    }
+    public class AopEvents
+    {
+        public Action<DiffLogModel> OnDiffLogEvent { get; set; }
+        public Action<SqlSugarException> OnError { get; set; }
+        public Action<string, SugarParameter[]> OnLogExecuting { get; set; }
+        public Action<string, SugarParameter[]> OnLogExecuted { get; set; }
+        public Func<string, SugarParameter[], KeyValuePair<string, SugarParameter[]>> OnExecutingChangeSql { get; set; }
+    }
     public class ConfigureExternalServices
     {
 
         private ISerializeService _SerializeService;
         private ICacheService _ReflectionInoCache;
         private ICacheService _DataInfoCache;
+        private IRazorService _RazorService;
+
+        public IRazorService RazorService
+        {
+            get
+            {
+                if (_RazorService == null)
+                    return _RazorService;
+                else
+                    return _RazorService;
+            }
+            set { _RazorService = value; }
+        }
 
         public ISerializeService SerializeService
         {
@@ -90,5 +121,9 @@ namespace SqlSugar
 
         public List<SqlFuncExternal> SqlFuncServices { get; set; }
         public List<KeyValuePair<string, CSharpDataType>> AppendDataReaderTypeMappings { get;  set; }
+
+
+        public Action<PropertyInfo, EntityColumnInfo> EntityService{ get; set; }
+        public Action<Type,EntityInfo> EntityNameService { get; set; }
     }
 }

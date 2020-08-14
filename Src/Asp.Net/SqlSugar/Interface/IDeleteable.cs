@@ -22,11 +22,16 @@ namespace SqlSugar
         IDeleteable<T> In<PkType>(PkType primaryKeyValue);
         IDeleteable<T> In<PkType>(PkType[] primaryKeyValues);
         IDeleteable<T> In<PkType>(List<PkType> primaryKeyValues);
+        IDeleteable<T> In<PkType>(Expression<Func<T,object>> inField,PkType primaryKeyValue);
+        IDeleteable<T> In<PkType>(Expression<Func<T, object>> inField,PkType[] primaryKeyValues);
+        IDeleteable<T> In<PkType>(Expression<Func<T, object>> inField,List<PkType> primaryKeyValues);
         IDeleteable<T> Where(string whereString,object parameters=null);
         IDeleteable<T> Where(string whereString, SugarParameter parameter);
         IDeleteable<T> Where(string whereString, SugarParameter[] parameters);
         IDeleteable<T> Where(string whereString, List<SugarParameter> parameters);
+        IDeleteable<T> EnableDiffLogEvent(object businessData = null);
         IDeleteable<T> RemoveDataCache();
         KeyValuePair<string, List<SugarParameter>> ToSql();
+        void AddQueue();
     }
 }

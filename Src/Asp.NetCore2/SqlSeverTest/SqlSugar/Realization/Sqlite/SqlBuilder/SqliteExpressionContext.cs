@@ -4,7 +4,7 @@ namespace SqlSugar
 {
     public class SqliteExpressionContext : ExpressionContext, ILambdaExpressions
     {
-        public SqlSugarClient Context { get; set; }
+        public SqlSugarProvider Context { get; set; }
         public SqliteExpressionContext()
         {
             base.DbMehtods = new SqliteMethod();
@@ -18,6 +18,14 @@ namespace SqlSugar
         {
             var parameter = model.Args[0];
             return string.Format("LENGTH({0})", parameter.MemberName);
+        }
+
+        public override string Substring(MethodCallExpressionModel model)
+        {
+            var parameter = model.Args[0];
+            var parameter2 = model.Args[1];
+            var parameter3 = model.Args[2];
+            return string.Format("SUBSTR({0},1 + {1},{2})", parameter.MemberName, parameter2.MemberName, parameter3.MemberName);
         }
 
         public override string Contains(MethodCallExpressionModel model)
@@ -157,7 +165,7 @@ namespace SqlSugar
             var parameter = model.Args[0].MemberName;
             var parameter2 = model.Args[1].MemberName;
             int time = 1;
-            return string.Format(" Cast((JulianDay({0}) - JulianDay({1}))  *{2} As INTEGER)", parameter, parameter2, time);
+            return string.Format(" Cast((JulianDay({0}) - JulianDay({1}))  *{2} As INTEGER)=0 ", parameter, parameter2, time);
         }
         public override string DateIsSameByType(MethodCallExpressionModel model)
         {
@@ -207,6 +215,16 @@ namespace SqlSugar
         public override string GetDate()
         {
             return "DATETIME('now')";
+        }
+
+        public override string GetRandom()
+        {
+            return "RANDOM()";
+        }
+
+        public override string CharIndex(MethodCallExpressionModel model)
+        {
+            throw new NotSupportedException("Slqite Not Supported CharIndex");
         }
     }
 }

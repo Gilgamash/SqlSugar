@@ -19,6 +19,7 @@ namespace SqlSugar
         public bool IsNullable { get; set; }
         public bool IsIdentity { get; set; }
         public bool IsPrimarykey { get; set; }
+        public bool IsEnableUpdateVersionValidation { get; set; }
         public string EntityName { get;  set; }
         public string DbTableName { get; set; }
         public bool IsIgnore { get;  set; }
@@ -26,5 +27,11 @@ namespace SqlSugar
         public int DecimalDigits { get; set; }
         public string OracleSequenceName { get; set; }
         public bool IsOnlyIgnoreInsert { get; set; }
+        public bool IsOnlyIgnoreUpdate { get; set; }
+        public bool IsTranscoding { get; set; }
+        public string SerializeDateTimeFormat { get;  set; }
+        public bool IsJson { get;  set; }
+        public bool NoSerialize { get;  set; }
+        public string[] IndexGroupNameList { get;  set; }
     }
 }

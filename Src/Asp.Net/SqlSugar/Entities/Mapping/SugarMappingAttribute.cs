@@ -10,8 +10,14 @@ namespace SqlSugar
     public class SugarTable : Attribute {
         private SugarTable() { }
         public string TableName { get; set; }
+        public string TableDescription { get; set; }
         public SugarTable(string tableName) {
             this.TableName = tableName;
+        }
+        public SugarTable(string tableName,string tableDescription)
+        {
+            this.TableName = tableName;
+            this.TableDescription = tableDescription;
         }
     }
    [AttributeUsage(AttributeTargets.Property , Inherited = true)]
@@ -105,6 +111,66 @@ namespace SqlSugar
             get { return _IsOnlyIgnoreInsert; }
             set { _IsOnlyIgnoreInsert = value; }
         }
+
+        private bool _IsOnlyIgnoreUpdate;
+        public bool IsOnlyIgnoreUpdate
+        {
+            get { return _IsOnlyIgnoreUpdate; }
+            set { _IsOnlyIgnoreUpdate = value; }
+        }
+
+
+        private bool _IsEnableUpdateVersionValidation;
+        public bool IsEnableUpdateVersionValidation {
+            get { return _IsEnableUpdateVersionValidation; }
+            set { _IsEnableUpdateVersionValidation = value; }
+        }
+
+
+
+        private bool _IsTranscoding;
+        public bool IsTranscoding
+        {
+            get { return _IsTranscoding; }
+            set { _IsTranscoding = value; }
+        }
+
+        private bool _NoSerialize;
+        public bool NoSerialize
+        {
+            get { return _NoSerialize; }
+            set { _NoSerialize = value; }
+        }
+
+        private string _SerializeDateTimeFormat;
+        public string SerializeDateTimeFormat
+        {
+            get { return _SerializeDateTimeFormat; }
+            set { _SerializeDateTimeFormat = value; }
+        }
+
+        private bool _IsJson;
+        public bool IsJson
+        {
+            get { return _IsJson; }
+            set { _IsJson = value; }
+        }
+
+
+        private string _DefaultValue;
+        public string DefaultValue
+        {
+            get { return _DefaultValue; }
+            set { _DefaultValue = value; }
+        }
+
+        private string[] _IndexGroupNameList;
+        public string[] IndexGroupNameList
+        {
+            get { return _IndexGroupNameList; }
+            set { _IndexGroupNameList = value; }
+        }
+
     }
 
 }

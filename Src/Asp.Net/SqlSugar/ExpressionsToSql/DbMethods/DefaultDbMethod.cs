@@ -93,6 +93,44 @@ namespace SqlSugar
             }
         }
 
+        public virtual string ContainsArrayUseSqlParameters(MethodCallExpressionModel model)
+        {
+            var inValueIEnumerable = (IEnumerable)model.Args[0].MemberValue;
+            List<object> inValues = new List<object>();
+            if (inValueIEnumerable != null)
+            {
+                foreach (var item in inValueIEnumerable)
+                {
+                    if (item != null && item.GetType().IsEnum())
+                    {
+                        inValues.Add(Convert.ToInt64(item));
+                    }
+                    else
+                    {
+                        inValues.Add(item);
+                    }
+                }
+            }
+            var value = model.Args[1].MemberName;
+            string inValueString = null;
+            if (inValues != null && inValues.Count > 0)
+            {
+                for (int i = 0; i < inValues.Count; i++)
+                {
+                    inValueString += model.Data + "_" + i+",";
+                }
+            }
+            if (inValueString.IsNullOrEmpty())
+            {
+                return " (1=2) ";
+            }
+            else
+            {
+                inValueString=inValueString.TrimEnd(',');
+                return string.Format(" ({0} IN ({1})) ", value, inValueString);
+            }
+        }
+
         public virtual string Equals(MethodCallExpressionModel model)
         {
             var parameter = model.Args[0];
@@ -264,6 +302,12 @@ namespace SqlSugar
             return string.Format("COUNT({0})", parameter.MemberName);
         }
 
+        public virtual string AggregateDistinctCount(MethodCallExpressionModel model)
+        {
+            var parameter = model.Args[0];
+            return string.Format("COUNT(DISTINCT{0})", parameter.MemberName);
+        }
+
         public virtual string MappingColumn(MethodCallExpressionModel model)
         {
             var parameter = model.Args[0];
@@ -325,6 +369,11 @@ namespace SqlSugar
             return "GETDATE()";
         }
 
+        public virtual string GetRandom()
+        {
+            return "NEWID()";
+        }
+
         public virtual string CaseWhen(List<KeyValuePair<string, string>> sqls)
         {
             StringBuilder reslut = new StringBuilder();
@@ -347,6 +396,10 @@ namespace SqlSugar
                 }
             }
             return reslut.ToString();
+        }
+        public virtual string CharIndex(MethodCallExpressionModel model)
+        {
+            return string.Format("CHARINDEX ({0},{1})", model.Args[0].MemberName, model.Args[1].MemberName);
         }
     }
 }

@@ -45,11 +45,16 @@
   <ItemGroup>
     <Compile Include="CacheDemo.cs" />
     <Compile Include="Config.cs" />
+    <Compile Include="DbFirstDemo.cs" />
     <Compile Include="Models\Student.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\SqlSugar.DbFirstExtensions\SqlSugar.DbFirstExtensions.csproj">
+      <Project>{629cdf51-682f-4b22-843a-ba76c232accd}</Project>
+      <Name>SqlSugar.DbFirstExtensions</Name>
+    </ProjectReference>
     <ProjectReference Include="..\SqlSugar.Extensions.DataCache\SqlSugar.Extensions.DataCache.csproj">
       <Project>{cdb72abe-0336-4730-a195-abf2611deeaa}</Project>
       <Name>SqlSugar.Extensions.DataCache</Name>

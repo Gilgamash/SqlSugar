@@ -11,6 +11,12 @@ namespace SqlSugar
         static Assembly assembly = Assembly.Load(UtilConstants.AssemblyName);
         static Dictionary<string, Type> typeCache = new Dictionary<string, Type>();
 
+
+        public static void RemoveCache()
+        {
+            typeCache = new Dictionary<string, Type>();
+        }
+
         #region Queryable
         public static ISugarQueryable<T> GetQueryable<T>(ConnectionConfig currentConnectionConfig)
         {
@@ -129,6 +135,10 @@ namespace SqlSugar
             {
                 return new SqlServerQueryBuilder();
             }
+            else if (currentConnectionConfig.DbType == DbType.MySql)
+            {
+                return new MySqlQueryBuilder();
+            }
             else
             {
                 QueryBuilder result = CreateInstance<QueryBuilder>(GetClassName(currentConnectionConfig.DbType.ToString(), "QueryBuilder"));
@@ -157,6 +167,10 @@ namespace SqlSugar
             {
                 return new SqlServerExpressionContext();
             }
+            else if (currentConnectionConfig.DbType == DbType.MySql)
+            {
+                return new MySqlExpressionContext();
+            }
             else
             {
                 ILambdaExpressions result = CreateInstance<ILambdaExpressions>(GetClassName(currentConnectionConfig.DbType.ToString(), "ExpressionContext"));
@@ -169,6 +183,10 @@ namespace SqlSugar
             if (currentConnectionConfig.DbType == DbType.SqlServer)
             {
                 return new SqlServerBuilder();
+            }
+            else if (currentConnectionConfig.DbType == DbType.MySql)
+            {
+                return new MySqlBuilder();
             }
             else
             {
@@ -206,6 +224,10 @@ namespace SqlSugar
             if (currentConnectionConfig.DbType == DbType.Oracle)
             {
                 return new OracleInsertable<T>();
+            }
+            else if (currentConnectionConfig.DbType == DbType.PostgreSQL)
+            {
+                return new PostgreSQLInserttable<T>();
             }
             else
             {

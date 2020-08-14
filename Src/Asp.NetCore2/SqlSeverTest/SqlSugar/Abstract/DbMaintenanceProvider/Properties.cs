@@ -9,7 +9,7 @@ namespace SqlSugar
     {
         #region Context
         private ISqlBuilder _SqlBuilder;
-        public SqlSugarClient Context { get; set; }
+        public SqlSugarProvider Context { get; set; }
         public ISqlBuilder SqlBuilder
         {
             get
@@ -26,11 +26,16 @@ namespace SqlSugar
 
         #region DML
         protected abstract string GetViewInfoListSql { get; }
+        protected abstract string GetDataBaseSql { get; }
         protected abstract string GetTableInfoListSql { get; }
         protected abstract string GetColumnInfosByTableNameSql { get; }
         #endregion
 
         #region DDL
+        protected abstract string CreateIndexSql { get;  }
+        protected abstract string IsAnyIndexSql { get; }
+        protected abstract string AddDefaultValueSql { get;  }
+        protected abstract string CreateDataBaseSql { get; }
         protected abstract string AddColumnToTableSql { get; }
         protected abstract string AlterColumnToTableSql { get; }
         protected abstract string BackupDataBaseSql { get; }
@@ -43,6 +48,13 @@ namespace SqlSugar
         protected abstract string DropConstraintSql { get; }
         protected abstract string AddPrimaryKeySql { get; }
         protected abstract string RenameColumnSql { get; }
+        protected abstract string AddColumnRemarkSql { get;  }
+        protected abstract string DeleteColumnRemarkSql { get; }
+        protected abstract string IsAnyColumnRemarkSql { get;  }
+        protected abstract string AddTableRemarkSql { get;  }
+        protected abstract string DeleteTableRemarkSql { get; }
+        protected abstract string IsAnyTableRemarkSql { get;  }
+        protected abstract string RenameTableSql { get; }
         #endregion
 
         #region Check

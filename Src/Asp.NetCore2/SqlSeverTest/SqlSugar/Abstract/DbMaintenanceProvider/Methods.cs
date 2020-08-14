@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -8,6 +9,10 @@ namespace SqlSugar
     public abstract partial class DbMaintenanceProvider : IDbMaintenance
     {
         #region DML
+        public virtual List<string> GetDataBaseList(SqlSugarClient db)
+        {
+            return db.Ado.SqlQuery<string>(this.GetDataBaseSql);
+        }
         public virtual List<DbTableInfo> GetViewInfoList(bool isCache = true)
         {
             string cacheKey = "DbMaintenanceProvider.GetViewInfoList";
@@ -45,7 +50,7 @@ namespace SqlSugar
             cacheKey = GetCacheKey(cacheKey);
             var sql = string.Format(this.GetColumnInfosByTableNameSql, tableName);
             if (isCache)
-                return GetListOrCache<DbColumnInfo>(cacheKey, sql).GroupBy(it=>it.DbColumnName).Select(it=>it.First()).ToList();
+                return GetListOrCache<DbColumnInfo>(cacheKey, sql).GroupBy(it => it.DbColumnName).Select(it => it.First()).ToList();
             else
                 return this.Context.Ado.SqlQuery<DbColumnInfo>(sql).GroupBy(it => it.DbColumnName).Select(it => it.First()).ToList();
 
@@ -97,7 +102,8 @@ namespace SqlSugar
             Check.Exception(!isAny, string.Format("Table {0} does not exist", tableName));
             var columns = GetColumnInfosByTableName(tableName);
             if (columns.IsNullOrEmpty()) return false;
-            return columns.Any(it => it.IsPrimarykey = true && it.DbColumnName.Equals(columnName, StringComparison.CurrentCultureIgnoreCase));
+            var result=columns.Any(it => it.IsPrimarykey == true && it.DbColumnName.Equals(columnName, StringComparison.CurrentCultureIgnoreCase));
+            return result;
         }
         public virtual bool IsIdentity(string tableName, string columnName)
         {
@@ -132,11 +138,47 @@ namespace SqlSugar
         #endregion
 
         #region DDL
+        /// <summary>
+        ///by current connection string
+        /// </summary>
+        /// <param name="databaseDirectory"></param>
+        /// <returns></returns>
+        public virtual bool CreateDatabase(string databaseDirectory = null)
+        {
+            var seChar = Path.DirectorySeparatorChar.ToString();
+            if (databaseDirectory.HasValue())
+            {
+                databaseDirectory = databaseDirectory.TrimEnd('\\').TrimEnd('/');
+            }
+            var databaseName= this.Context.Ado.Connection.Database;
+            return CreateDatabase(databaseName,databaseDirectory);
+        }
+        /// <summary>
+        /// by databaseName
+        /// </summary>
+        /// <param name="databaseName"></param>
+        /// <param name="databaseDirectory"></param>
+        /// <returns></returns>
+        public virtual bool CreateDatabase(string databaseName, string databaseDirectory = null)
+        {
+            this.Context.Ado.ExecuteCommand(string.Format(CreateDataBaseSql, databaseName, databaseDirectory));
+            return true;
+        }
+
         public virtual bool AddPrimaryKey(string tableName, string columnName)
         {
             tableName = this.SqlBuilder.GetTranslationTableName(tableName);
             columnName = this.SqlBuilder.GetTranslationTableName(columnName);
             string sql = string.Format(this.AddPrimaryKeySql, tableName, string.Format("PK_{0}_{1}", this.SqlBuilder.GetNoTranslationColumnName(tableName), this.SqlBuilder.GetNoTranslationColumnName(columnName)), columnName);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+
+        public bool AddPrimaryKeys(string tableName, string[] columnNames)
+        {
+            tableName = this.SqlBuilder.GetTranslationTableName(tableName);
+            var columnName = string.Join(",", columnNames);
+            string sql = string.Format(this.AddPrimaryKeySql, tableName, string.Format("PK_{0}_{1}", this.SqlBuilder.GetNoTranslationColumnName(columnNames.First()), this.SqlBuilder.GetNoTranslationColumnName(columnNames.First())), columnName);
             this.Context.Ado.ExecuteCommand(sql);
             return true;
         }
@@ -160,6 +202,12 @@ namespace SqlSugar
             tableName = this.SqlBuilder.GetTranslationTableName(tableName);
             this.Context.Ado.ExecuteCommand(string.Format(this.DropTableSql, tableName));
             return true;
+        }
+
+        public virtual bool TruncateTable<T>()
+        {
+            this.Context.InitMappingInfo<T>();
+            return this.TruncateTable(this.Context.EntityMaintenance.GetEntityInfo<T>().DbTableName);
         }
         public virtual bool DropColumn(string tableName, string columnName)
         {
@@ -195,7 +243,7 @@ namespace SqlSugar
         {
             oldTableName = this.SqlBuilder.GetTranslationTableName(oldTableName);
             newTableName = this.SqlBuilder.GetTranslationTableName(newTableName);
-            string sql = string.Format(this.BackupTableSql, newTableName, oldTableName, maxBackupDataRows);
+            string sql = string.Format(this.BackupTableSql, maxBackupDataRows, newTableName, oldTableName);
             this.Context.Ado.ExecuteCommand(sql);
             return true;
         }
@@ -205,6 +253,155 @@ namespace SqlSugar
             oldColumnName = this.SqlBuilder.GetTranslationColumnName(oldColumnName);
             newColumnName = this.SqlBuilder.GetTranslationColumnName(newColumnName);
             string sql = string.Format(this.RenameColumnSql, tableName, oldColumnName, newColumnName);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public virtual bool AddColumnRemark(string columnName, string tableName, string description)
+        {
+            string sql = string.Format(this.AddColumnRemarkSql, columnName, tableName, description);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public virtual bool DeleteColumnRemark(string columnName, string tableName)
+        {
+            string sql = string.Format(this.DeleteColumnRemarkSql, columnName, tableName);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public virtual bool IsAnyColumnRemark(string columnName, string tableName)
+        {
+            string sql = string.Format(this.IsAnyColumnRemarkSql, columnName, tableName);
+            var dt=this.Context.Ado.GetDataTable(sql);
+            return dt.Rows!=null&&dt.Rows.Count>0;
+        }
+        public virtual bool AddTableRemark(string tableName, string description)
+        {
+            string sql = string.Format(this.AddTableRemarkSql,tableName, description);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public virtual bool DeleteTableRemark(string tableName)
+        {
+            string sql = string.Format(this.DeleteTableRemarkSql,tableName);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public virtual bool IsAnyTableRemark(string tableName)
+        {
+            string sql = string.Format(this.IsAnyTableRemarkSql, tableName);
+            var dt=this.Context.Ado.GetDataTable(sql);
+            return dt.Rows != null && dt.Rows.Count > 0;
+        }
+        public virtual bool AddDefaultValue(string tableName, string columnName, string defaultValue)
+        {
+            if (defaultValue == "''")
+            {
+                defaultValue = "";
+            }
+            string sql = string.Format(AddDefaultValueSql, tableName, columnName,defaultValue);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public virtual bool CreateIndex(string tableName, string[] columnNames)
+        {
+            string sql = string.Format(CreateIndexSql,tableName,string.Join(",",columnNames), string.Join("_", columnNames));
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
+        public virtual bool IsAnyIndex(string indexName)
+        {
+            string sql = string.Format(this.IsAnyIndexSql, indexName);
+            return this.Context.Ado.GetInt(sql)>0;
+        }
+        public virtual bool AddRemark(EntityInfo entity)
+        {
+            var db = this.Context;
+            var columns = entity.Columns.Where(it => it.IsIgnore == false).ToList();
+
+            foreach (var item in columns)
+            {
+                if (item.ColumnDescription != null)
+                {
+                    //column remak
+                    if (db.DbMaintenance.IsAnyColumnRemark(item.DbColumnName, item.DbTableName))
+                    {
+                        db.DbMaintenance.DeleteColumnRemark(item.DbColumnName, item.DbTableName);
+                        db.DbMaintenance.AddColumnRemark(item.DbColumnName, item.DbTableName, item.ColumnDescription);
+                    }
+                    else
+                    {
+                        db.DbMaintenance.AddColumnRemark(item.DbColumnName, item.DbTableName, item.ColumnDescription);
+                    }
+                }
+            }
+
+            //table remak
+            if (entity.TableDescription != null)
+            {
+                if (db.DbMaintenance.IsAnyTableRemark(entity.DbTableName))
+                {
+                    db.DbMaintenance.DeleteTableRemark(entity.DbTableName);
+                    db.DbMaintenance.AddTableRemark(entity.DbTableName, entity.TableDescription);
+                }
+                else
+                {
+                    db.DbMaintenance.AddTableRemark(entity.DbTableName, entity.TableDescription);
+                }
+            }
+            return true;
+        }
+
+        public virtual void AddIndex(EntityInfo entityInfo)
+        {
+            var db = this.Context;
+            var columns = entityInfo.Columns.Where(it => it.IsIgnore == false).ToList();
+            var indexColumns = columns.Where(it => it.IndexGroupNameList.HasValue()).ToList();
+            if (indexColumns.HasValue())
+            {
+                var groups = indexColumns.SelectMany(it => it.IndexGroupNameList).GroupBy(it => it).Select(it=>it.Key).ToList();
+                foreach (var item in groups)
+                {
+                    var columnNames = indexColumns.Where(it => it.IndexGroupNameList.Any(i => i.Equals(item, StringComparison.CurrentCultureIgnoreCase))).Select(it=>it.DbColumnName).ToArray();
+                    var indexName = string.Format("Index_{0}_{1}",entityInfo.DbTableName, string.Join("_", columnNames));
+                    if (!IsAnyIndex(indexName))
+                    {
+                        CreateIndex(entityInfo.DbTableName, columnNames);
+                    }
+                }
+            }
+        }
+
+        protected virtual bool IsAnyDefaultValue(string tableName, string columnName,List<DbColumnInfo> columns)
+        {
+            var defaultValue = columns.Where(it => it.DbColumnName.Equals(columnName, StringComparison.CurrentCultureIgnoreCase)).First().DefaultValue;
+            return defaultValue.HasValue();
+        }
+
+        public virtual bool IsAnyDefaultValue(string tableName, string columnName)
+        {
+            return IsAnyDefaultValue(tableName, columnName, this.GetColumnInfosByTableName(tableName, false));
+        }
+
+        public virtual void AddDefaultValue(EntityInfo entityInfo)
+        {
+            var dbColumns=this.GetColumnInfosByTableName(entityInfo.DbTableName, false);
+            var db = this.Context;
+            var columns = entityInfo.Columns.Where(it => it.IsIgnore == false).ToList();
+            foreach (var item in columns)
+            {
+                if (item.DefaultValue.HasValue())
+                {
+                    if (!IsAnyDefaultValue(entityInfo.DbTableName,item.DbColumnName,dbColumns))
+                    {
+                        this.AddDefaultValue(entityInfo.DbTableName, item.DbColumnName, item.DefaultValue);
+                    }
+                }
+            }
+        }
+
+        public virtual bool RenameTable(string oldTableName, string newTableName)
+        {
+            string sql = string.Format(this.RenameTableSql, oldTableName,newTableName);
             this.Context.Ado.ExecuteCommand(sql);
             return true;
         }
@@ -255,7 +452,7 @@ namespace SqlSugar
         }
         protected virtual string GetUpdateColumnSql(string tableName, DbColumnInfo columnInfo)
         {
-            string columnName = this.SqlBuilder.GetTranslationTableName(columnInfo.DbColumnName);
+            string columnName = this.SqlBuilder.GetTranslationColumnName(columnInfo.DbColumnName);
             tableName = this.SqlBuilder.GetTranslationTableName(tableName);
             string dataSize = GetSize(columnInfo);
             string dataType = columnInfo.DataType;

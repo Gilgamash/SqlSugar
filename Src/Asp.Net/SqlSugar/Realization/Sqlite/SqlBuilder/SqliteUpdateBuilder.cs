@@ -19,7 +19,7 @@ namespace SqlSugar
                 foreach (var item in pkList)
                 {
                     var isFirst = pkList.First() == item;
-                    var whereString = isFirst ? " " : " AND ";
+                    var whereString = "";
                     whereString += GetOracleUpdateColums(item);
                     whereList.Add(whereString);
                 }
@@ -40,7 +40,7 @@ namespace SqlSugar
             }
             else
             {
-                var type = value.GetType();
+                var type = UtilMethods.GetUnderType(value.GetType());
                 if (type == UtilConstants.DateType)
                 {
                     var date = value.ObjToDate();

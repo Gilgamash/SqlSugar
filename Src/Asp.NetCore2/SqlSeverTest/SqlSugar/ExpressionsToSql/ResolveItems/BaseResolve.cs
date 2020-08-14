@@ -44,6 +44,10 @@ namespace SqlSugar
             {
                 return new LambdaExpressionResolve(parameter);
             }
+            else if (expression is BinaryExpression && expression.NodeType == ExpressionType.Coalesce)
+            {
+                return new CoalesceResolveItems(parameter);
+            }
             else if (expression is BinaryExpression)
             {
                 return new BinaryExpressionResolve(parameter);
@@ -129,7 +133,7 @@ namespace SqlSugar
             if (parameter.BaseExpression is BinaryExpression || parameter.BaseExpression == null)
             {
                 var oppoSiteExpression = isLeft == true ? parameter.BaseParameter.RightExpression : parameter.BaseParameter.LeftExpression;
-                if (parameter.CurrentExpression is MethodCallExpression)
+                if (parameter.CurrentExpression is MethodCallExpression||parameter.CurrentExpression is ConditionalExpression||parameter.CurrentExpression.NodeType==ExpressionType.Coalesce)
                 {
                     var appendValue = value;
                     if (this.Context.Result.Contains(ExpressionConst.FormatSymbol))
@@ -249,6 +253,19 @@ namespace SqlSugar
                 this.Context.Result.Replace(ExpressionConst.FormatSymbol, "NOT");
             }
         }
+        protected void AppendNegate(object Value)
+        {
+            var isAppend = !this.Context.Result.Contains(ExpressionConst.FormatSymbol);
+            var lastCharIsSpace = this.Context.Result.LastCharIsSpace;
+            if (isAppend)
+            {
+                this.Context.Result.Append(lastCharIsSpace ? "-" : " -");
+            }
+            else
+            {
+                this.Context.Result.Replace(ExpressionConst.FormatSymbol, "-");
+            }
+        }
 
         protected MethodCallExpressionArgs GetMethodCallArgs(ExpressionParameter parameter, Expression item)
         {
@@ -256,6 +273,7 @@ namespace SqlSugar
             newContext.MappingColumns = this.Context.MappingColumns;
             newContext.MappingTables = this.Context.MappingTables;
             newContext.IgnoreComumnList = this.Context.IgnoreComumnList;
+            newContext.IsSingle = this.Context.IsSingle;
             newContext.SqlFuncServices = this.Context.SqlFuncServices;
             newContext.Resolve(item, this.Context.IsJoin ? ResolveExpressType.WhereMultiple : ResolveExpressType.WhereSingle);
             this.Context.Index = newContext.Index;
@@ -278,7 +296,7 @@ namespace SqlSugar
 
         protected string GetNewExpressionValue(Expression item)
         {
-            var newContext = this.Context.GetCopyContext();
+            var newContext = this.Context.GetCopyContextWithMapping();
             newContext.Resolve(item, this.Context.IsJoin ? ResolveExpressType.WhereMultiple : ResolveExpressType.WhereSingle);
             this.Context.Index = newContext.Index;
             this.Context.ParameterIndex = newContext.ParameterIndex;
@@ -336,7 +354,8 @@ namespace SqlSugar
                 if (this.Context.Result.IsLockCurrentParameter == false)
                 {
                     var expression = ((UnaryExpression)item).Operand as MemberExpression;
-                    if (expression.Expression == null)
+                    var isDateTimeNow = ((UnaryExpression)item).Operand.ToString() == "DateTime.Now";
+                    if (expression.Expression == null && !isDateTimeNow)
                     {
                         this.Context.Result.CurrentParameter = parameter;
                         this.Context.Result.IsLockCurrentParameter = true;
@@ -347,7 +366,7 @@ namespace SqlSugar
                         this.Context.Result.Append(this.Context.GetAsString(asName, parameter.CommonTempData.ObjToString()));
                         this.Context.Result.CurrentParameter = null;
                     }
-                    else if (expression.Expression is ConstantExpression)
+                    else if (expression.Expression is ConstantExpression || isDateTimeNow)
                     {
                         string parameterName = this.Context.SqlParameterKeyWord + "constant" + this.Context.ParameterIndex;
                         this.Context.ParameterIndex++;
@@ -394,6 +413,10 @@ namespace SqlSugar
                     }
                     this.Context.Result.Append(this.Context.GetAsString(asName, newContext.Result.GetString()));
                     this.Context.Result.CurrentParameter = null;
+                    if (this.Context.SingleTableNameSubqueryShortName.IsNullOrEmpty() && newContext.SingleTableNameSubqueryShortName.HasValue())
+                    {
+                        this.Context.SingleTableNameSubqueryShortName = newContext.SingleTableNameSubqueryShortName;
+                    }
                 }
             }
             else if (item.Type.IsClass())
@@ -418,7 +441,8 @@ namespace SqlSugar
                         var propertyName = property.Name;
                         var dbColumnName = propertyName;
                         var mappingInfo = this.Context.MappingColumns.FirstOrDefault(it => it.EntityName == item.Type.Name && it.PropertyName.Equals(propertyName, StringComparison.CurrentCultureIgnoreCase));
-                        if (mappingInfo.HasValue()) {
+                        if (mappingInfo.HasValue())
+                        {
                             dbColumnName = mappingInfo.DbColumnName;
                         }
                         asName = this.Context.GetTranslationText(item.Type.Name + "." + propertyName);
@@ -433,7 +457,30 @@ namespace SqlSugar
                     }
                 }
             }
-            else if (item is MethodCallExpression|| item is UnaryExpression)
+            else if (item.Type == UtilConstants.BoolType && item is MethodCallExpression && (item as MethodCallExpression).Method.Name == "Any"&&IsSubMethod(item as MethodCallExpression))
+            {
+                this.Expression = item;
+                this.Start();
+                var sql= this.Context.DbMehtods.IIF(new MethodCallExpressionModel()
+                {
+                     Args=new List<MethodCallExpressionArgs>() {
+                          new MethodCallExpressionArgs() {
+                               IsMember=true,
+                               MemberName=parameter.CommonTempData.ObjToString()
+                          },
+                             new MethodCallExpressionArgs() {
+                                IsMember=true,
+                                MemberName=1
+                          },
+                          new MethodCallExpressionArgs() {
+                               IsMember=true,
+                               MemberName=0
+                          }
+                     }
+                });
+                parameter.Context.Result.Append(this.Context.GetAsString(asName, sql));
+            }
+            else if (item is MethodCallExpression || item is UnaryExpression || item is ConditionalExpression || item.NodeType == ExpressionType.Coalesce)
             {
                 this.Expression = item;
                 this.Start();
@@ -444,5 +491,66 @@ namespace SqlSugar
                 Check.ThrowNotSupportedException(item.GetType().Name);
             }
         }
+        protected static bool IsConvert(Expression item)
+        {
+            return item is UnaryExpression && item.NodeType == ExpressionType.Convert;
+        }
+
+        protected static bool IsNotMember(Expression item)
+        {
+            return item is UnaryExpression &&
+                                     item.Type == UtilConstants.BoolType &&
+                                    (item as UnaryExpression).NodeType == ExpressionType.Not &&
+                                    (item as UnaryExpression).Operand is MemberExpression &&
+                                   ((item as UnaryExpression).Operand as MemberExpression).Expression != null &&
+                                   ((item as UnaryExpression).Operand as MemberExpression).Expression.NodeType == ExpressionType.Parameter;
+        }
+        protected static bool IsNotParameter(Expression item)
+        {
+            return item is UnaryExpression &&
+                                     item.Type == UtilConstants.BoolType &&
+                                    (item as UnaryExpression).NodeType == ExpressionType.Not &&
+                                    (item as UnaryExpression).Operand is MemberExpression &&
+                                   ((item as UnaryExpression).Operand as MemberExpression).Expression != null &&
+                                   ((item as UnaryExpression).Operand as MemberExpression).Expression.NodeType == ExpressionType.MemberAccess;
+        }
+
+        protected bool IsSubMethod(MethodCallExpression express)
+        {
+            return SubTools.SubItemsConst.Any(it => express.Object != null && express.Object.Type.Name == "Subqueryable`1");
+        }
+        protected static Dictionary<string, string> MethodMapping = new Dictionary<string, string>() {
+            { "ToString","ToString"},
+            { "ToInt32","ToInt32"},
+            { "ToInt16","ToInt32"},
+            { "ToInt64","ToInt64"},
+            { "ToDecimal","ToDecimal"},
+            { "ToDateTime","ToDate"},
+            { "ToBoolean","ToBool"},
+            { "ToDouble","ToDouble"},
+            { "Length","Length"},
+            { "Replace","Replace"},
+            { "Contains","Contains"},
+            { "ContainsArray","ContainsArray"},
+            { "EndsWith","EndsWith"},
+            { "StartsWith","StartsWith"},
+            { "HasValue","HasValue"},
+            { "Trim","Trim"},
+            { "Equals","Equals"},
+            { "ToLower","ToLower"},
+            { "ToUpper","ToUpper"},
+            { "Substring","Substring"},
+            { "DateAdd","DateAdd"}
+        };
+
+        protected static  Dictionary<string, DateType> MethodTimeMapping = new Dictionary<string, DateType>() {
+            { "AddYears",DateType.Year},
+            { "AddMonths",DateType.Month},
+            { "AddDays",DateType.Day},
+            { "AddHours",DateType.Hour},
+            { "AddMinutes",DateType.Minute},
+            { "AddSeconds",DateType.Second},
+            { "AddMilliseconds",DateType.Millisecond}
+        };
     }
 }

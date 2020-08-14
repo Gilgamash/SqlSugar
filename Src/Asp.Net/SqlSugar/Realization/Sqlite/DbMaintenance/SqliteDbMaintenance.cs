@@ -3,14 +3,23 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Data.SQLite;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace SqlSugar
 {
     public class SqliteDbMaintenance : DbMaintenanceProvider
     {
         #region DML
+        protected override string GetDataBaseSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
         protected override string GetColumnInfosByTableNameSql
         {
             get
@@ -35,6 +44,13 @@ namespace SqlSugar
         #endregion
 
         #region DDL
+        protected override string CreateDataBaseSql
+        {
+            get
+            {
+                return "CREATE DATABASE {0}";
+            }
+        }
         protected override string AddPrimaryKeySql
         {
             get
@@ -46,7 +62,7 @@ namespace SqlSugar
         {
             get
             {
-                throw new NotSupportedException();
+                return "ALTER TABLE {0} ADD COLUMN {1} {2}{3}";
             }
         }
         protected override string AlterColumnToTableSql
@@ -120,6 +136,84 @@ namespace SqlSugar
                 throw new NotSupportedException();
             }
         }
+
+        protected override string AddColumnRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string DeleteColumnRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string IsAnyColumnRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string AddTableRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string DeleteTableRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string IsAnyTableRemarkSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string RenameTableSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        protected override string CreateIndexSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+        protected override string AddDefaultValueSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
+        protected override string IsAnyIndexSql
+        {
+            get
+            {
+                throw new NotSupportedException();
+            }
+        }
         #endregion
 
         #region Check
@@ -164,6 +258,27 @@ namespace SqlSugar
         #endregion
 
         #region Methods
+        /// <summary>
+        ///by current connection string
+        /// </summary>
+        /// <param name="databaseDirectory"></param>
+        /// <returns></returns>
+        public override bool CreateDatabase(string databaseName, string databaseDirectory = null)
+        {
+            var connString=this.Context.CurrentConnectionConfig.ConnectionString;
+            var path = Regex.Match(connString, @"[a-z,A-Z]\:\\.+\\").Value;
+            if (path.IsNullOrEmpty())
+            {
+                path = Regex.Match(connString, @"[a-z,A-Z]\:\/.+\/").Value;
+            }
+            if (!FileHelper.IsExistDirectory(path))
+            {
+                FileHelper.CreateDirectory(path);
+            }
+            this.Context.Ado.Connection.Open();
+            this.Context.Ado.Connection.Close();
+            return true;
+        }
         public override List<DbColumnInfo> GetColumnInfosByTableName(string tableName, bool isCache = true)
         {
             string cacheKey = "DbMaintenanceProvider.GetColumnInfosByTableName." + this.SqlBuilder.GetNoTranslationColumnName(tableName).ToLower();
@@ -179,9 +294,13 @@ namespace SqlSugar
 
                  });
         }
-
+        public override bool AddRemark(EntityInfo entity)
+        {
+            return true;
+        }
         private List<DbColumnInfo> GetColumnsByTableName(string tableName)
         {
+            tableName = SqlBuilder.GetTranslationTableName(tableName);
             string sql = "select * from " + tableName + " limit 0,1";
             var oldIsEnableLog = this.Context.Ado.IsEnableLogEvent;
             this.Context.Ado.IsEnableLogEvent = false;
@@ -209,17 +328,24 @@ namespace SqlSugar
                 return result;
             }
         }
-
+        public override bool BackupTable(string oldTableName, string newTableName, int maxBackupDataRows = int.MaxValue)
+        {
+            oldTableName = this.SqlBuilder.GetTranslationTableName(oldTableName);
+            newTableName = this.SqlBuilder.GetTranslationTableName(newTableName);
+            string sql = string.Format(this.BackupTableSql, newTableName, oldTableName, maxBackupDataRows);
+            this.Context.Ado.ExecuteCommand(sql);
+            return true;
+        }
         public override bool CreateTable(string tableName, List<DbColumnInfo> columns, bool isCreatePrimaryKey = true)
         {
             if (columns.HasValue())
             {
                 foreach (var item in columns)
                 {
-                    if (item.DbColumnName.Equals("GUID", StringComparison.CurrentCultureIgnoreCase))
-                    {
-                        item.Length = 20;
-                    }
+                    //if (item.DbColumnName.Equals("GUID", StringComparison.CurrentCultureIgnoreCase))
+                    //{
+                    //    item.Length = 20;
+                    //}
                     if (item.IsIdentity && !item.IsPrimarykey)
                     {
                         item.IsPrimarykey = true;

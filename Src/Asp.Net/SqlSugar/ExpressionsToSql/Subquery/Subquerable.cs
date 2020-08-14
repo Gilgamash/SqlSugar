@@ -9,7 +9,15 @@ namespace SqlSugar
 
     public class Subqueryable<T> where T : class, new()
     {
+        public Subqueryable<T> Where(string where)
+        {
+            return this;
+        }
         public Subqueryable<T> Where(Func<T, bool> expression)
+        {
+            return this;
+        }
+        public Subqueryable<T> WhereIF(bool isWhere,Func<T, bool> expression)
         {
             return this;
         }

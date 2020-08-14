@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace SqlSugar
 {
@@ -16,7 +17,7 @@ namespace SqlSugar
             this.WhereValues = new List<string>();
             this.Parameters = new List<SugarParameter>();
         }
-        public SqlSugarClient Context { get; set; }
+        public SqlSugarProvider Context { get; set; }
         public ILambdaExpressions LambdaExpressions { get; set; }
         public ISqlBuilder Builder { get; set; }
         public StringBuilder sql { get; set; }
@@ -27,8 +28,10 @@ namespace SqlSugar
         public List<string> WhereValues { get; set; }
         public List<KeyValuePair<string, string>> SetValues { get; set; }
         public bool IsNoUpdateNull { get; set; }
+        public bool IsNoUpdateDefaultValue { get; set; }
         public List<string> PrimaryKeys { get; set; }
         public bool IsOffIdentity { get; set; }
+        public bool IsWhereColumns { get; set; }
 
         public virtual string SqlTemplate
         {
@@ -120,6 +123,14 @@ namespace SqlSugar
                 resolveExpress.IgnoreComumnList = Context.IgnoreColumns;
                 resolveExpress.SqlFuncServices = Context.CurrentConnectionConfig.ConfigureExternalServices == null ? null : Context.CurrentConnectionConfig.ConfigureExternalServices.SqlFuncServices;
             }
+            resolveExpress.InitMappingInfo = Context.InitMappingInfo;
+            resolveExpress.RefreshMapping = () =>
+            {
+                resolveExpress.MappingColumns = Context.MappingColumns;
+                resolveExpress.MappingTables = Context.MappingTables;
+                resolveExpress.IgnoreComumnList = Context.IgnoreColumns;
+                resolveExpress.SqlFuncServices = Context.CurrentConnectionConfig.ConfigureExternalServices == null ? null : Context.CurrentConnectionConfig.ConfigureExternalServices.SqlFuncServices;
+            };
             resolveExpress.Resolve(expression, resolveType);
             this.Parameters.AddRange(resolveExpress.Parameters);
             var result = resolveExpress.Result;
@@ -130,6 +141,10 @@ namespace SqlSugar
             if (IsNoUpdateNull)
             {
                 DbColumnInfoList = DbColumnInfoList.Where(it => it.Value != null).ToList();
+            }
+            if (IsNoUpdateDefaultValue)
+            {
+                DbColumnInfoList = DbColumnInfoList.Where(it => it.Value.ObjToString() !=UtilMethods.DefaultForType(it.PropertyType).ObjToString()).ToList();
             }
             var groupList = DbColumnInfoList.GroupBy(it => it.TableId).ToList();
             var isSingle = groupList.Count() == 1;
@@ -188,10 +203,10 @@ namespace SqlSugar
                     {
                         var isFirst = whereString == null;
                         whereString += (isFirst ? null : " AND ");
-                        whereString += item;
+                        whereString += Regex.Replace(item,"\\"+this.Builder.SqlTranslationLeft,"S."+ this.Builder.SqlTranslationLeft);
                     }
                 }
-                else if (PrimaryKeys.HasValue())
+                if (PrimaryKeys.HasValue())
                 {
                     foreach (var item in PrimaryKeys)
                     {
@@ -239,6 +254,15 @@ namespace SqlSugar
                     whereString += Builder.GetTranslationColumnName(item) + "=" + this.Context.Ado.SqlParameterKeyWord + item;
                 }
             }
+            if (PrimaryKeys.HasValue()&&IsWhereColumns)
+            {
+                foreach (var item in PrimaryKeys)
+                {
+                    var isFirst = whereString == null;
+                    whereString += (isFirst ? " WHERE " : " AND ");
+                    whereString += Builder.GetTranslationColumnName(item) + "=" + this.Context.Ado.SqlParameterKeyWord + item;
+                }
+            }
             return string.Format(SqlTemplate, GetTableNameString, columnsString, whereString);
         }
 
@@ -250,7 +274,7 @@ namespace SqlSugar
             }
             else
             {
-                var type = value.GetType();
+                var type = UtilMethods.GetUnderType(value.GetType());
                 if (type == UtilConstants.DateType)
                 {
                     var date = value.ObjToDate();

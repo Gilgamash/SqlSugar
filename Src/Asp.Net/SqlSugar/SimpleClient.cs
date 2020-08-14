@@ -6,16 +6,188 @@ using System.Text;
 
 namespace SqlSugar
 {
-    public partial class SimpleClient
+    
+    public partial class SimpleClient<T> where T : class, new()
     {
-        protected SqlSugarClient Context { get; set; }
-        public SqlSugarClient FullClient { get { return this.Context; } }
+        protected ISqlSugarClient Context { get; set; }
+
+        public ITenant AsTenant()
+        {
+            return this.Context as ITenant;
+        }
+        public ISqlSugarClient AsSugarClient()
+        {
+            return this.Context;
+        }
 
         private SimpleClient()
         {
 
         }
-        public SimpleClient(SqlSugarClient context)
+        public SimpleClient(ISqlSugarClient context)
+        {
+            this.Context = context;
+        }
+
+        public ISugarQueryable<T> AsQueryable()
+        {
+            return Context.Queryable<T>();
+        }
+        public IInsertable<T> AsInsertable(T insertObj)
+        {
+            return Context.Insertable<T>(insertObj);
+        }
+        public IInsertable<T> AsInsertable(T[] insertObjs) 
+        {
+            return Context.Insertable<T>(insertObjs);
+        }
+        public IInsertable<T> AsInsertable(List<T> insertObjs)
+        {
+            return Context.Insertable<T>(insertObjs);
+        }
+        public IUpdateable<T> AsUpdateable(T updateObj)
+        {
+            return Context.Updateable<T>(updateObj);
+        }
+        public IUpdateable<T> AsUpdateable(T[] updateObjs)
+        {
+            return Context.Updateable<T>(updateObjs);
+        }
+        public IUpdateable<T> AsUpdateable(List<T> updateObjs)
+        {
+            return Context.Updateable<T>(updateObjs);
+        }
+        public IDeleteable<T> AsDeleteable()
+        {
+            return Context.Deleteable<T>();
+        }
+
+        public T GetById(dynamic id)
+        {
+            return Context.Queryable<T>().InSingle(id);
+        }
+        public List<T> GetList()
+        {
+            return Context.Queryable<T>().ToList();
+        }
+
+        public List<T> GetList(Expression<Func<T, bool>> whereExpression)
+        {
+            return Context.Queryable<T>().Where(whereExpression).ToList();
+        }
+        public T GetSingle(Expression<Func<T, bool>> whereExpression)
+        {
+            return Context.Queryable<T>().Single(whereExpression);
+        }
+        public List<T> GetPageList(Expression<Func<T, bool>> whereExpression, PageModel page)
+        {
+            int count = 0;
+            var result = Context.Queryable<T>().Where(whereExpression).ToPageList(page.PageIndex, page.PageSize, ref count);
+            page.PageCount = count;
+            return result;
+        }
+        public List<T> GetPageList(Expression<Func<T, bool>> whereExpression, PageModel page, Expression<Func<T, object>> orderByExpression = null, OrderByType orderByType = OrderByType.Asc)
+        {
+            int count = 0;
+            var result = Context.Queryable<T>().OrderByIF(orderByExpression != null, orderByExpression, orderByType).Where(whereExpression).ToPageList(page.PageIndex, page.PageSize, ref count);
+            page.PageCount = count;
+            return result;
+        }
+        public List<T> GetPageList(List<IConditionalModel> conditionalList, PageModel page)
+        {
+            int count = 0;
+            var result = Context.Queryable<T>().Where(conditionalList).ToPageList(page.PageIndex, page.PageSize, ref count);
+            page.PageCount = count;
+            return result;
+        }
+        public List<T> GetPageList(List<IConditionalModel> conditionalList, PageModel page, Expression<Func<T, object>> orderByExpression = null, OrderByType orderByType = OrderByType.Asc)
+        {
+            int count = 0;
+            var result = Context.Queryable<T>().OrderByIF(orderByExpression != null, orderByExpression, orderByType).Where(conditionalList).ToPageList(page.PageIndex, page.PageSize, ref count);
+            page.PageCount = count;
+            return result;
+        }
+        public bool IsAny(Expression<Func<T, bool>> whereExpression)
+        {
+            return Context.Queryable<T>().Where(whereExpression).Any();
+        }
+        public int Count(Expression<Func<T, bool>> whereExpression)
+        {
+
+            return Context.Queryable<T>().Where(whereExpression).Count();
+        }
+
+        public bool Insert(T insertObj)
+        {
+            return this.Context.Insertable(insertObj).ExecuteCommand() > 0;
+        }
+        public int InsertReturnIdentity(T insertObj)
+        {
+            return this.Context.Insertable(insertObj).ExecuteReturnIdentity();
+        }
+        public bool InsertRange(T[] insertObjs)
+        {
+            return this.Context.Insertable(insertObjs).ExecuteCommand() > 0;
+        }
+        public bool InsertRange(List<T> insertObjs)
+        {
+            return this.Context.Insertable(insertObjs).ExecuteCommand() > 0;
+        }
+        public bool Update(T updateObj)
+        {
+            return this.Context.Updateable(updateObj).ExecuteCommand() > 0;
+        }
+        public bool UpdateRange(T[] updateObjs)
+        {
+            return this.Context.Updateable(updateObjs).ExecuteCommand() > 0;
+        }
+        public bool UpdateRange(List<T> updateObjs)
+        {
+            return this.Context.Updateable(updateObjs).ExecuteCommand() > 0;
+        }
+        public bool Update(Expression<Func<T, T>> columns, Expression<Func<T, bool>> whereExpression)
+        {
+            return this.Context.Updateable<T>().SetColumns(columns).Where(whereExpression).ExecuteCommand() > 0;
+        }
+        public bool Delete(T deleteObj)
+        {
+            return this.Context.Deleteable<T>().Where(deleteObj).ExecuteCommand() > 0;
+        }
+        public bool Delete(Expression<Func<T, bool>> whereExpression)
+        {
+            return this.Context.Deleteable<T>().Where(whereExpression).ExecuteCommand() > 0;
+        }
+        public bool DeleteById(dynamic id)
+        {
+            return this.Context.Deleteable<T>().In(id).ExecuteCommand() > 0;
+        }
+        public bool DeleteByIds(dynamic[] ids)
+        {
+            return this.Context.Deleteable<T>().In(ids).ExecuteCommand() > 0;
+        }
+
+        [Obsolete("Use AsSugarClient()")]
+        public ISqlSugarClient FullClient { get { return this.Context; } }
+    }
+
+
+    public partial class SimpleClient
+    {
+        protected ISqlSugarClient Context { get; set; }
+        public ITenant AsTenant()
+        {
+            return this.Context as ITenant;
+        }
+        public ISqlSugarClient AsSugarClient()
+        {
+            return this.Context;
+        }
+
+        private SimpleClient()
+        {
+
+        }
+        public SimpleClient(ISqlSugarClient context)
         {
             this.Context = context;
         }
@@ -23,6 +195,10 @@ namespace SqlSugar
         public T GetById<T>(dynamic id) where T : class, new()
         {
             return Context.Queryable<T>().InSingle(id);
+        }
+        public int Count<T>(Expression<Func<T, bool>> whereExpression)
+        {
+            return Context.Queryable<T>().Where(whereExpression).Count();
         }
         public List<T> GetList<T>() where T : class, new()
         {
@@ -80,7 +256,7 @@ namespace SqlSugar
         {
             return this.Context.Insertable(insertObjs).ExecuteCommand() > 0;
         }
-        public bool InsertRange<T>(List<T>[] insertObjs) where T : class, new()
+        public bool InsertRange<T>(List<T> insertObjs) where T : class, new()
         {
             return this.Context.Insertable(insertObjs).ExecuteCommand() > 0;
         }
@@ -92,9 +268,13 @@ namespace SqlSugar
         {
             return this.Context.Updateable(updateObjs).ExecuteCommand() > 0;
         }
+        public bool UpdateRange<T>(List<T> updateObjs) where T : class, new()
+        {
+            return this.Context.Updateable(updateObjs).ExecuteCommand() > 0;
+        }
         public bool Update<T>(Expression<Func<T, T>> columns, Expression<Func<T, bool>> whereExpression) where T : class, new()
         {
-            return this.Context.Updateable<T>().UpdateColumns(columns).Where(whereExpression).ExecuteCommand() > 0;
+            return this.Context.Updateable<T>(columns).Where(whereExpression).ExecuteCommand() > 0;
         }
         public bool Delete<T>(T deleteObj) where T : class, new()
         {
@@ -112,118 +292,7 @@ namespace SqlSugar
         {
             return this.Context.Deleteable<T>().In(ids).ExecuteCommand() > 0;
         }
-    }
-    public partial class SimpleClient<T> where T : class, new()
-    {
-        protected SqlSugarClient Context { get; set; }
-        public SqlSugarClient FullClient { get { return this.Context; } }
-
-        private SimpleClient()
-        {
-
-        }
-        public SimpleClient(SqlSugarClient context)
-        {
-            this.Context = context;
-        }
-
-        public T GetById(dynamic id)
-        {
-            return Context.Queryable<T>().InSingle(id);
-        }
-        public List<T> GetList()
-        {
-            return Context.Queryable<T>().ToList();
-        }
-        public List<T> GetList(Expression<Func<T, bool>> whereExpression)
-        {
-            return Context.Queryable<T>().Where(whereExpression).ToList();
-        }
-        public T GetSingle(Expression<Func<T, bool>> whereExpression)
-        {
-            return Context.Queryable<T>().Single(whereExpression);
-        }
-        public List<T> GetPageList(Expression<Func<T, bool>> whereExpression, PageModel page)
-        {
-            int count = 0;
-            var result = Context.Queryable<T>().Where(whereExpression).ToPageList(page.PageIndex, page.PageSize, ref count);
-            page.PageCount = count;
-            return result;
-        }
-        public List<T> GetPageList(Expression<Func<T, bool>> whereExpression, PageModel page, Expression<Func<T, object>> orderByExpression = null, OrderByType orderByType = OrderByType.Asc) 
-        {
-            int count = 0;
-            var result = Context.Queryable<T>().OrderByIF(orderByExpression != null, orderByExpression, orderByType).Where(whereExpression).ToPageList(page.PageIndex, page.PageSize, ref count);
-            page.PageCount = count;
-            return result;
-        }
-        public List<T> GetPageList(List<IConditionalModel> conditionalList, PageModel page)
-        {
-            int count = 0;
-            var result = Context.Queryable<T>().Where(conditionalList).ToPageList(page.PageIndex, page.PageSize, ref count);
-            page.PageCount = count;
-            return result;
-        }
-        public List<T> GetPageList(List<IConditionalModel> conditionalList, PageModel page, Expression<Func<T, object>> orderByExpression = null, OrderByType orderByType = OrderByType.Asc)  
-        {
-            int count = 0;
-            var result = Context.Queryable<T>().OrderByIF(orderByExpression != null, orderByExpression, orderByType).Where(conditionalList).ToPageList(page.PageIndex, page.PageSize, ref count);
-            page.PageCount = count;
-            return result;
-        }
-        public bool IsAny(Expression<Func<T, bool>> whereExpression)
-        {
-            return Context.Queryable<T>().Where(whereExpression).Any();
-        }
-        public int Count(Expression<Func<T, bool>> whereExpression)
-        {
-
-            return Context.Queryable<T>().Where(whereExpression).Count();
-        }
-
-        public bool Insert(T insertObj)
-        {
-            return this.Context.Insertable(insertObj).ExecuteCommand() > 0;
-        }
-        public int InsertReturnIdentity(T insertObj)
-        {
-            return this.Context.Insertable(insertObj).ExecuteReturnIdentity();
-        }
-        public bool InsertRange(T[] insertObjs)
-        {
-            return this.Context.Insertable(insertObjs).ExecuteCommand() > 0;
-        }
-        public bool InsertRange(List<T>[] insertObjs)
-        {
-            return this.Context.Insertable(insertObjs).ExecuteCommand() > 0;
-        }
-        public bool Update(T updateObj)
-        {
-            return this.Context.Updateable(updateObj).ExecuteCommand() > 0;
-        }
-        public bool UpdateRange(T [] updateObjs)
-        {
-            return this.Context.Updateable(updateObjs).ExecuteCommand() > 0;
-        }
-        public bool Update(Expression<Func<T, T>> columns, Expression<Func<T, bool>> whereExpression)
-        {
-            return this.Context.Updateable<T>().UpdateColumns(columns).Where(whereExpression).ExecuteCommand() > 0;
-        }
-        public bool Delete(T deleteObj)
-        {
-            return this.Context.Deleteable<T>().Where(deleteObj).ExecuteCommand() > 0;
-        }
-        public bool Delete(Expression<Func<T, bool>> whereExpression)
-        {
-            return this.Context.Deleteable<T>().Where(whereExpression).ExecuteCommand() > 0;
-        }
-        public bool DeleteById(dynamic id)
-        {
-            return this.Context.Deleteable<T>().In(id).ExecuteCommand() > 0;
-        }
-        public bool DeleteByIds(dynamic[] ids)
-        {
-            return this.Context.Deleteable<T>().In(ids).ExecuteCommand() > 0;
-        }
+        [Obsolete("Use AsSugarClient()")]
+        public ISqlSugarClient FullClient { get { return this.Context; } }
     }
 }

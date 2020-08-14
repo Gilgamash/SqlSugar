@@ -5,12 +5,14 @@ using System.Data.SqlClient;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
+
 namespace SqlSugar
 {
     public abstract partial class DbBindProvider : DbBindAccessory, IDbBind
     {
         #region Properties
-        public virtual SqlSugarClient Context { get; set; }
+        public virtual SqlSugarProvider Context { get; set; }
         public abstract List<KeyValuePair<string, CSharpDataType>> MappingTypes { get; }
         #endregion
 
@@ -167,8 +169,7 @@ namespace SqlSugar
             }
             else if (propertyTypes == null || propertyTypes.Count() == 0)
             {
-                Check.ThrowNotSupportedException(string.Format(" \"{0}\" Type NotSupported, DbBindProvider.GetPropertyTypeName error.", dbTypeName));
-                return null;
+                return "object";
             }
             else if (propertyTypes.First().Value == CSharpDataType.byteArray)
             {
@@ -183,11 +184,11 @@ namespace SqlSugar
         {
             using (dataReader)
             {
-                if (type.Name.Contains("KeyValuePair"))
+                if (type.Name.StartsWith("KeyValuePair"))
                 {
                     return GetKeyValueList<T>(type, dataReader);
                 }
-                else if (type.IsValueType() || type == UtilConstants.StringType||type== UtilConstants.ByteArrayType)
+                else if (type.IsValueType() || type == UtilConstants.StringType || type == UtilConstants.ByteArrayType)
                 {
                     return GetValueTypeList<T>(type, dataReader);
                 }
@@ -199,6 +200,66 @@ namespace SqlSugar
                 {
                     return GetEntityList<T>(Context, dataReader);
                 }
+            }
+        }
+        public virtual async Task<List<T>> DataReaderToListAsync<T>(Type type, IDataReader dataReader)
+        {
+            using (dataReader)
+            {
+                if (type.Name.StartsWith("KeyValuePair"))
+                {
+                    return await GetKeyValueListAsync<T>(type, dataReader);
+                }
+                else if (type.IsValueType() || type == UtilConstants.StringType || type == UtilConstants.ByteArrayType)
+                {
+                    return await GetValueTypeListAsync<T>(type, dataReader);
+                }
+                else if (type.IsArray)
+                {
+                    return await GetArrayListAsync<T>(type, dataReader);
+                }
+                else
+                {
+                    return await GetEntityListAsync<T>(Context, dataReader);
+                }
+            }
+        }
+        public virtual List<T> DataReaderToListNoUsing<T>(Type type, IDataReader dataReader)
+        {
+            if (type.Name.StartsWith("KeyValuePair"))
+            {
+                return GetKeyValueList<T>(type, dataReader);
+            }
+            else if (type.IsValueType() || type == UtilConstants.StringType || type == UtilConstants.ByteArrayType)
+            {
+                return GetValueTypeList<T>(type, dataReader);
+            }
+            else if (type.IsArray)
+            {
+                return GetArrayList<T>(type, dataReader);
+            }
+            else
+            {
+                return GetEntityList<T>(Context, dataReader);
+            }
+        }
+        public virtual Task<List<T>> DataReaderToListNoUsingAsync<T>(Type type, IDataReader dataReader)
+        {
+            if (type.Name.StartsWith("KeyValuePair"))
+            {
+                return GetKeyValueListAsync<T>(type, dataReader);
+            }
+            else if (type.IsValueType() || type == UtilConstants.StringType || type == UtilConstants.ByteArrayType)
+            {
+                return GetValueTypeListAsync<T>(type, dataReader);
+            }
+            else if (type.IsArray)
+            {
+                return GetArrayListAsync<T>(type, dataReader);
+            }
+            else
+            {
+                return GetEntityListAsync<T>(Context, dataReader);
             }
         }
         #endregion

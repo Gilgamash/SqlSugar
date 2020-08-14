@@ -7,7 +7,7 @@ namespace SqlSugar
 {
     internal class CacheKeyBuider
     {
-        public static CacheKey GetKey(SqlSugarClient context, QueryBuilder queryBuilder)
+        public static CacheKey GetKey(SqlSugarProvider context, QueryBuilder queryBuilder)
         {
             CacheKey result = new CacheKey();
             result.Database = context.Context.Ado.Connection.Database;
@@ -28,6 +28,7 @@ namespace SqlSugar
             result.IdentificationList.Add(queryBuilder.Take.ObjToString());
             result.IdentificationList.Add(queryBuilder.Skip.ObjToString());
             result.IdentificationList.Add(queryBuilder.IsCount.ObjToString());
+            result.IdentificationList.Add(UtilMethods.GetMD5(queryBuilder.GetSelectValue.ObjToString()));
             if (queryBuilder.Parameters.HasValue())
             {
                 foreach (var item in queryBuilder.Parameters)
@@ -37,7 +38,7 @@ namespace SqlSugar
             }
         }
 
-        private static void AddTables(SqlSugarClient context, QueryBuilder queryBuilder, CacheKey result)
+        private static void AddTables(ISqlSugarClient context, QueryBuilder queryBuilder, CacheKey result)
         {
             result.Tables = new List<string>();
             result.Tables.Add(context.EntityMaintenance.GetTableName(queryBuilder.EntityName));

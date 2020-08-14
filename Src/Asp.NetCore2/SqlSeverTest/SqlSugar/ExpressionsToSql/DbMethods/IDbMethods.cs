@@ -20,6 +20,7 @@ namespace SqlSugar
         string Trim(MethodCallExpressionModel model);
         string Contains(MethodCallExpressionModel model);
         string ContainsArray(MethodCallExpressionModel model);
+        string ContainsArrayUseSqlParameters(MethodCallExpressionModel model);
         string Equals(MethodCallExpressionModel model);
         string DateIsSameDay(MethodCallExpressionModel model);
         string DateIsSameByType(MethodCallExpressionModel model);
@@ -48,6 +49,7 @@ namespace SqlSugar
         string AggregateMin(MethodCallExpressionModel model);
         string AggregateMax(MethodCallExpressionModel model);
         string AggregateCount(MethodCallExpressionModel model);
+        string AggregateDistinctCount(MethodCallExpressionModel model);
         string MappingColumn(MethodCallExpressionModel model);
         string IsNull(MethodCallExpressionModel model);
         string GetSelfAndAutoFill(string shortName,bool isSingle);
@@ -59,5 +61,7 @@ namespace SqlSugar
         string Pack(string sql);
         string Null();
         string GetDate();
+        string GetRandom();
+        string CharIndex(MethodCallExpressionModel model);
     }
 }

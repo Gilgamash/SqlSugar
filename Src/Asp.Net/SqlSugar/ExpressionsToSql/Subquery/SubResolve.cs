@@ -39,7 +39,23 @@ namespace SqlSugar
                 }
                 else if (context.Expression is MethodCallExpression)
                 {
-                    var meExp = ((context.Expression as MethodCallExpression).Object as MethodCallExpression).Arguments[0] as LambdaExpression;
+                    var expArgs = ((context.Expression as MethodCallExpression).Object as MethodCallExpression).Arguments;
+                    if (expArgs != null && expArgs.Any())
+                    {
+                        var meExp = expArgs[0] as LambdaExpression;
+                        var selfParameterName = meExp.Parameters.First().Name;
+                        context.SingleTableNameSubqueryShortName = (((meExp.Body as BinaryExpression).Left as MemberExpression).Expression as ParameterExpression).Name;
+                        if (context.SingleTableNameSubqueryShortName == selfParameterName)
+                        {
+                            context.SingleTableNameSubqueryShortName = (((meExp.Body as BinaryExpression).Right as MemberExpression).Expression as ParameterExpression).Name;
+                        }
+                    }
+                }
+                else if (context.Expression.GetType().Name == "MethodBinaryExpression")
+                {
+
+                    var subExp = (context.Expression as BinaryExpression).Left is MethodCallExpression ? (context.Expression as BinaryExpression).Left : (context.Expression as BinaryExpression).Right;
+                    var meExp = ((subExp as MethodCallExpression).Object as MethodCallExpression).Arguments[0] as LambdaExpression;
                     var selfParameterName = meExp.Parameters.First().Name;
                     context.SingleTableNameSubqueryShortName = (((meExp.Body as BinaryExpression).Left as MemberExpression).Expression as ParameterExpression).Name;
                     if (context.SingleTableNameSubqueryShortName == selfParameterName)
@@ -52,11 +68,15 @@ namespace SqlSugar
                     Check.Exception(true, "I'm sorry I can't parse the current expression");
                 }
             }
+            var subIndex = this.context.SubQueryIndex;
             while (currentExpression != null)
             {
                 var addItem = currentExpression.Object as MethodCallExpression;
                 if (addItem != null)
                     allMethods.Add(addItem);
+                if (subIndex==this.context.SubQueryIndex&&addItem !=null&&addItem.Arguments.HasValue()&&addItem.Arguments.Any(it=>it.ToString().Contains("Subqueryable()"))) {
+                    this.context.SubQueryIndex++;
+                }
                 currentExpression = addItem;
             }
         }
@@ -83,6 +103,16 @@ namespace SqlSugar
                  {
                      item = items.First(s => s is SubAnd);
                  }
+
+                 if (item is SubWhereIF && hasWhere == false)
+                 {
+                     hasWhere = true;
+                 }
+                 else if (item is SubWhereIF)
+                 {
+                     item = items.First(s => s is SubAndIF);
+                 }
+
                  item.Context = this.context;
                  item.Expression = exp;
                  return item;

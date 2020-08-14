@@ -8,9 +8,17 @@ namespace SqlSugar
     public partial class CodeFirstProvider : ICodeFirst
     {
         #region Properties
-        public virtual SqlSugarClient Context { get; set; }
-        private bool IsBackupTable { get; set; }
-        private int MaxBackupDataRows { get; set; }
+        public virtual SqlSugarProvider Context { get; set; }
+        protected bool IsBackupTable { get; set; }
+        protected int MaxBackupDataRows { get; set; }
+        protected virtual int DefultLength { get; set; }
+        public CodeFirstProvider()
+        {
+            if (DefultLength == 0)
+            {
+                DefultLength = 255;
+            }
+        }
         #endregion
 
         #region Public methods
@@ -20,11 +28,18 @@ namespace SqlSugar
             this.MaxBackupDataRows = maxBackupDataRows;
             return this;
         }
+
+        public virtual ICodeFirst SetStringDefaultLength(int length)
+        {
+            DefultLength = length;
+            return this;
+        }
+
         public virtual void InitTables(Type entityType)
         {
 
             this.Context.Utilities.RemoveCacheAll();
-            this.Context.InitMppingInfo(entityType);
+            this.Context.InitMappingInfo(entityType);
             if (!this.Context.DbMaintenance.IsAnySystemTablePermissions())
             {
                 Check.Exception(true, "Dbfirst and  Codefirst requires system table permissions");
@@ -36,7 +51,23 @@ namespace SqlSugar
             });
             Check.Exception(!executeResult.IsSuccess, executeResult.ErrorMessage);
         }
-        public virtual void InitTables(Type[] entityTypes)
+        public void InitTables<T>()
+        {
+            InitTables(typeof(T));
+        }
+        public void InitTables<T, T2>()
+        {
+            InitTables(typeof(T), typeof(T2));
+        }
+        public void InitTables<T, T2, T3>()
+        {
+            InitTables(typeof(T), typeof(T2), typeof(T3));
+        }
+        public void InitTables<T, T2, T3, T4>()
+        {
+            InitTables(typeof(T), typeof(T2), typeof(T3), typeof(T4));
+        }
+        public virtual void InitTables(params Type[] entityTypes)
         {
             if (entityTypes.HasValue())
             {
@@ -67,33 +98,47 @@ namespace SqlSugar
         protected virtual void Execute(Type entityType)
         {
             var entityInfo = this.Context.EntityMaintenance.GetEntityInfo(entityType);
+            if (this.DefultLength > 0)
+            {
+                foreach (var item in entityInfo.Columns)
+                {
+                    if (item.PropertyInfo.PropertyType == UtilConstants.StringType && item.DataType.IsNullOrEmpty() && item.Length == 0)
+                    {
+                        item.Length = DefultLength;
+                    }
+                }
+            }
             var tableName = GetTableName(entityInfo);
             var isAny = this.Context.DbMaintenance.IsAnyTable(tableName);
             if (isAny)
                 ExistLogic(entityInfo);
             else
                 NoExistLogic(entityInfo);
+
+            this.Context.DbMaintenance.AddRemark(entityInfo);
+            this.Context.DbMaintenance.AddIndex(entityInfo);
+            this.Context.DbMaintenance.AddDefaultValue(entityInfo);
         }
         public virtual void NoExistLogic(EntityInfo entityInfo)
         {
             var tableName = GetTableName(entityInfo);
-            Check.Exception(entityInfo.Columns.Where(it => it.IsPrimarykey).Count() > 1, "Use Code First ,The primary key must not exceed 1");
+            //Check.Exception(entityInfo.Columns.Where(it => it.IsPrimarykey).Count() > 1, "Use Code First ,The primary key must not exceed 1");
             List<DbColumnInfo> columns = new List<DbColumnInfo>();
             if (entityInfo.Columns.HasValue())
             {
-                foreach (var item in entityInfo.Columns.Where(it => it.IsIgnore == false))
+                foreach (var item in entityInfo.Columns.OrderBy(it => it.IsPrimarykey ? 0 : 1).Where(it => it.IsIgnore == false))
                 {
                     DbColumnInfo dbColumnInfo = EntityColumnToDbColumn(entityInfo, tableName, item);
                     columns.Add(dbColumnInfo);
                 }
             }
-            this.Context.DbMaintenance.CreateTable(tableName, columns,true);
+            this.Context.DbMaintenance.CreateTable(tableName, columns, true);
         }
         public virtual void ExistLogic(EntityInfo entityInfo)
         {
             if (entityInfo.Columns.HasValue())
             {
-                Check.Exception(entityInfo.Columns.Where(it => it.IsPrimarykey).Count() > 1, "Use Code First ,The primary key must not exceed 1");
+                //Check.Exception(entityInfo.Columns.Where(it => it.IsPrimarykey).Count() > 1, "Multiple primary keys do not support modifications");
 
                 var tableName = GetTableName(entityInfo);
                 var dbColumns = this.Context.DbMaintenance.GetColumnInfosByTableName(tableName);
@@ -117,6 +162,9 @@ namespace SqlSugar
                     .Where(it => !string.IsNullOrEmpty(it.OldDbColumnName))
                     .Where(entityColumn => dbColumns.Any(dbColumn => entityColumn.OldDbColumnName.Equals(dbColumn.DbColumnName, StringComparison.CurrentCultureIgnoreCase)))
                     .ToList();
+
+
+                var isMultiplePrimaryKey = dbColumns.Where(it => it.IsPrimarykey).Count() > 1 || entityColumns.Where(it => it.IsPrimarykey).Count() > 1;
 
 
                 var isChange = false;
@@ -145,9 +193,9 @@ namespace SqlSugar
                 {
                     var dbColumn = dbColumns.FirstOrDefault(dc => dc.DbColumnName.Equals(item.DbColumnName, StringComparison.CurrentCultureIgnoreCase));
                     if (dbColumn == null) continue;
-                    var pkDiff = item.IsPrimarykey != dbColumn.IsPrimarykey;
-                    var idEntityDiff = item.IsIdentity != dbColumn.IsIdentity;
-                    if (dbColumn != null && pkDiff && !idEntityDiff)
+                    bool pkDiff, idEntityDiff;
+                    KeyAction(item, dbColumn, out pkDiff, out idEntityDiff);
+                    if (dbColumn != null && pkDiff && !idEntityDiff && isMultiplePrimaryKey == false)
                     {
                         var isAdd = item.IsPrimarykey;
                         if (isAdd)
@@ -159,16 +207,32 @@ namespace SqlSugar
                             this.Context.DbMaintenance.DropConstraint(tableName, string.Format("PK_{0}_{1}", tableName, item.DbColumnName));
                         }
                     }
-                    else if (pkDiff || idEntityDiff)
+                    else if ((pkDiff || idEntityDiff) && isMultiplePrimaryKey == false)
                     {
                         ChangeKey(entityInfo, tableName, item);
                     }
+                }
+                if (isMultiplePrimaryKey)
+                {
+                    var oldPkNames = dbColumns.Where(it => it.IsPrimarykey).Select(it => it.DbColumnName.ToLower()).OrderBy(it => it).ToList();
+                    var newPkNames = entityColumns.Where(it => it.IsPrimarykey).Select(it => it.DbColumnName.ToLower()).OrderBy(it => it).ToList();
+                    if (!Enumerable.SequenceEqual(oldPkNames, newPkNames))
+                    {
+                        Check.Exception(true, ErrorMessage.GetThrowMessage("Modification of multiple primary key tables is not supported. Delete tables while creating", "不支持修改多主键表，请删除表在创建"));
+                    }
+
                 }
                 if (isChange && IsBackupTable)
                 {
                     this.Context.DbMaintenance.BackupTable(tableName, tableName + DateTime.Now.ToString("yyyyMMddHHmmss"), MaxBackupDataRows);
                 }
             }
+        }
+
+        protected virtual void KeyAction(EntityColumnInfo item, DbColumnInfo dbColumn, out bool pkDiff, out bool idEntityDiff)
+        {
+            pkDiff = item.IsPrimarykey != dbColumn.IsPrimarykey;
+            idEntityDiff = item.IsIdentity != dbColumn.IsIdentity;
         }
 
         protected virtual void ChangeKey(EntityInfo entityInfo, string tableName, EntityColumnInfo item)

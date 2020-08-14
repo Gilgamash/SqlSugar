@@ -9,7 +9,7 @@ namespace SqlSugar
 {
     public class EntityMaintenance
     {
-        public SqlSugarClient Context { get; set; }
+        public SqlSugarProvider Context { get; set; }
 
         public EntityInfo GetEntityInfo<T>()
         {
@@ -27,6 +27,14 @@ namespace SqlSugar
                 {
                     var sugarTable = (SugarTable)sugarAttributeInfo;
                     result.DbTableName = sugarTable.TableName;
+                    result.TableDescription = sugarTable.TableDescription;
+                }
+                if (this.Context.Context.CurrentConnectionConfig.ConfigureExternalServices != null && this.Context.CurrentConnectionConfig.ConfigureExternalServices.EntityNameService != null) {
+                    if (result.DbTableName == null)
+                    {
+                        result.DbTableName = type.Name;
+                    }
+                    this.Context.CurrentConnectionConfig.ConfigureExternalServices.EntityNameService(type,result);
                 }
                 result.Type = type;
                 result.EntityName = result.Type.Name;
@@ -38,7 +46,12 @@ namespace SqlSugar
         public string GetTableName<T>()
         {
             var typeName = typeof(T).Name;
-            if (this.Context.MappingTables == null || this.Context.MappingTables.Count == 0) return typeName;
+            if (this.Context.MappingTables == null || this.Context.MappingTables.Count == 0)
+            {
+                var entity = this.GetEntityInfo<T>();
+                if (entity.DbTableName.HasValue()) return entity.DbTableName;
+                else return entity.EntityName;
+            }
             else
             {
                 var mappingInfo = this.Context.MappingTables.SingleOrDefault(it => it.EntityName == typeName);
@@ -48,7 +61,12 @@ namespace SqlSugar
         public string GetTableName(Type entityType)
         {
             var typeName = entityType.Name;
-            if (this.Context.MappingTables == null || this.Context.MappingTables.Count == 0) return typeName;
+            if (this.Context.MappingTables == null || this.Context.MappingTables.Count == 0)
+            {
+                var entity = this.GetEntityInfo(entityType);
+                if (entity.DbTableName.HasValue()) return entity.DbTableName;
+                else return entity.EntityName;
+            }
             else
             {
                 var mappingInfo = this.Context.MappingTables.SingleOrDefault(it => it.EntityName == typeName);
@@ -79,7 +97,12 @@ namespace SqlSugar
             var isAny = this.GetEntityInfo<T>().Columns.Any(it => it.PropertyName.Equals(propertyName, StringComparison.CurrentCultureIgnoreCase));
             Check.Exception(!isAny, "Property " + propertyName + " is Invalid");
             var typeName = typeof(T).Name;
-            if (this.Context.MappingColumns == null || this.Context.MappingColumns.Count == 0) return propertyName;
+            if (this.Context.MappingColumns == null || this.Context.MappingColumns.Count == 0)
+            {
+                var column= this.GetEntityInfo<T>().Columns.First(it => it.PropertyName.Equals(propertyName, StringComparison.CurrentCultureIgnoreCase));
+                if (column.DbColumnName.HasValue()) return column.DbColumnName;
+                else return column.PropertyName;
+            }
             else
             {
                 var mappingInfo = this.Context.MappingColumns.SingleOrDefault(it => it.EntityName == typeName && it.PropertyName == propertyName);
@@ -91,7 +114,12 @@ namespace SqlSugar
             var isAny = this.GetEntityInfo(entityType).Columns.Any(it => it.PropertyName.Equals(propertyName, StringComparison.CurrentCultureIgnoreCase));
             Check.Exception(!isAny, "Property " + propertyName + " is Invalid");
             var typeName = entityType.Name;
-            if (this.Context.MappingColumns == null || this.Context.MappingColumns.Count == 0) return propertyName;
+            if (this.Context.MappingColumns == null || this.Context.MappingColumns.Count == 0)
+            {
+                var column = this.GetEntityInfo(entityType).Columns.First(it => it.PropertyName.Equals(propertyName, StringComparison.CurrentCultureIgnoreCase));
+                if (column.DbColumnName.HasValue()) return column.DbColumnName;
+                else return column.PropertyName;
+            }
             else
             {
                 var mappingInfo = this.Context.MappingColumns.SingleOrDefault(it => it.EntityName == typeName && it.PropertyName == propertyName);
@@ -158,10 +186,19 @@ namespace SqlSugar
                         column.DecimalDigits = sugarColumn.DecimalDigits;
                         column.OracleSequenceName = sugarColumn.OracleSequenceName;
                         column.IsOnlyIgnoreInsert = sugarColumn.IsOnlyIgnoreInsert;
+                        column.IsEnableUpdateVersionValidation = sugarColumn.IsEnableUpdateVersionValidation;
+                        column.IsTranscoding = sugarColumn.IsTranscoding;
+                        column.SerializeDateTimeFormat = sugarColumn.SerializeDateTimeFormat;
+                        column.IsJson = sugarColumn.IsJson;
+                        column.NoSerialize = sugarColumn.NoSerialize;
+                        column.DefaultValue = sugarColumn.DefaultValue;
+                        column.IndexGroupNameList = sugarColumn.IndexGroupNameList;
+                        column.IsOnlyIgnoreUpdate = sugarColumn.IsOnlyIgnoreUpdate;
                     }
                     else
                     {
                         column.IsIgnore = true;
+                        column.NoSerialize = sugarColumn.NoSerialize;
                     }
                 }
                 if (this.Context.MappingColumns.HasValue())
@@ -175,6 +212,9 @@ namespace SqlSugar
                     var golbalMappingInfo = this.Context.IgnoreColumns.FirstOrDefault(it => it.EntityName.Equals(result.EntityName, StringComparison.CurrentCultureIgnoreCase) && it.PropertyName == column.PropertyName);
                     if (golbalMappingInfo != null)
                         column.IsIgnore = true;
+                }
+                if (this.Context.CurrentConnectionConfig.ConfigureExternalServices != null && this.Context.CurrentConnectionConfig.ConfigureExternalServices.EntityService != null) {
+                    this.Context.CurrentConnectionConfig.ConfigureExternalServices.EntityService(property, column);
                 }
                 result.Columns.Add(column);
             }

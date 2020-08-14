@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Dynamic;
 using System.Linq;
 using System.Reflection;
@@ -8,9 +10,9 @@ using System.Text;
 using System.Threading.Tasks;
 namespace SqlSugar
 {
-    public class ContextMethods : IContextMethods
+    public partial class ContextMethods : IContextMethods
     {
-        public SqlSugarClient Context { get; set; }
+        public SqlSugarProvider Context { get; set; }
         #region DataReader
 
         /// <summary>
@@ -59,6 +61,64 @@ namespace SqlSugar
                 return result;
             }
         }
+        /// <summary>
+        ///DataReader to Dynamic List
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
+        public async Task<List<ExpandoObject>> DataReaderToExpandoObjectListAsync(IDataReader reader)
+        {
+            using (reader)
+            {
+                List<ExpandoObject> result = new List<ExpandoObject>();
+                if (reader != null && !reader.IsClosed)
+                {
+                    while (await((DbDataReader)reader).ReadAsync())
+                    {
+                        result.Add(DataReaderToExpandoObject(reader));
+                    }
+                }
+                return result;
+            }
+        }
+
+
+        /// <summary>
+        ///DataReader to Dynamic List
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
+        public List<ExpandoObject> DataReaderToExpandoObjectListNoUsing(IDataReader reader)
+        {
+            List<ExpandoObject> result = new List<ExpandoObject>();
+            if (reader != null && !reader.IsClosed)
+            {
+                while (reader.Read())
+                {
+                    result.Add(DataReaderToExpandoObject(reader));
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        ///DataReader to Dynamic List
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
+        public async Task<List<ExpandoObject>> DataReaderToExpandoObjectListAsyncNoUsing(IDataReader reader)
+        {
+            List<ExpandoObject> result = new List<ExpandoObject>();
+            if (reader != null && !reader.IsClosed)
+            {
+                while (await ((DbDataReader)reader).ReadAsync())
+                {
+                    result.Add(DataReaderToExpandoObject(reader));
+                }
+            }
+            return result;
+        }
+
 
         /// <summary>
         ///DataReader to DataReaderToDictionary
@@ -90,7 +150,7 @@ namespace SqlSugar
         /// </summary>
         /// <param name="reader"></param>
         /// <returns></returns>
-        public Dictionary<string, object> DataReaderToDictionary(IDataReader reader,Type type)
+        public Dictionary<string, object> DataReaderToDictionary(IDataReader reader, Type type)
         {
             Dictionary<string, object> result = new Dictionary<string, object>();
             for (int i = 0; i < reader.FieldCount; i++)
@@ -98,7 +158,7 @@ namespace SqlSugar
                 string name = reader.GetName(i);
                 try
                 {
-                    name = this.Context.EntityMaintenance.GetPropertyName(name,type);
+                    name = this.Context.EntityMaintenance.GetPropertyName(name, type);
                     var addItem = reader.GetValue(i);
                     if (addItem == DBNull.Value)
                         addItem = null;
@@ -113,12 +173,12 @@ namespace SqlSugar
         }
 
         /// <summary>
-        /// DataReaderToDynamicList
+        /// DataReaderToList
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="reader"></param>
         /// <returns></returns>
-        public List<T> DataReaderToDynamicList<T>(IDataReader reader)
+        public List<T> DataReaderToList<T>(IDataReader reader)
         {
             using (reader)
             {
@@ -129,58 +189,138 @@ namespace SqlSugar
                 {
                     while (reader.Read())
                     {
-                        var readerValues = DataReaderToDictionary(reader,tType);
-                        var result = new Dictionary<string, object>();
-                        foreach (var item in classProperties)
-                        {
-                            var name = item.Name;
-                            var typeName = tType.Name;
-                            if (item.PropertyType.IsClass())
-                            {
-                                result.Add(name, DataReaderToDynamicList_Part(readerValues, item, reval));
-                            }
-                            else
-                            {
-                                if (readerValues.Any(it => it.Key.Equals(name, StringComparison.CurrentCultureIgnoreCase)))
-                                {
-                                    var addValue = readerValues.ContainsKey(name) ? readerValues[name] : readerValues[name.ToUpper()];
-                                    if (addValue == DBNull.Value)
-                                    {
-                                        if (item.PropertyType.IsIn(UtilConstants.IntType, UtilConstants.DecType, UtilConstants.DobType, UtilConstants.ByteType))
-                                        {
-                                            addValue = 0;
-                                        }
-                                        else if (item.PropertyType == UtilConstants.GuidType)
-                                        {
-                                            addValue = Guid.Empty;
-                                        }
-                                        else if (item.PropertyType == UtilConstants.DateType)
-                                        {
-                                            addValue = DateTime.MinValue;
-                                        }
-                                        else if (item.PropertyType == UtilConstants.StringType)
-                                        {
-                                            addValue = null;
-                                        }
-                                        else
-                                        {
-                                            addValue = null;
-                                        }
-                                    }
-                                    else if (item.PropertyType == UtilConstants.IntType)
-                                    {
-                                        addValue = Convert.ToInt32(addValue);
-                                    }
-                                    result.Add(name, addValue);
-                                }
-                            }
-                        }
+                        Dictionary<string, object> result = DataReaderToList(reader, tType, classProperties, reval);
                         var stringValue = SerializeObject(result);
                         reval.Add((T)DeserializeObject<T>(stringValue));
                     }
                 }
                 return reval;
             }
+        }
+        /// <summary>
+        /// DataReaderToList
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="reader"></param>
+        /// <returns></returns>
+        public List<T> DataReaderToListNoUsing<T>(IDataReader reader)
+        {
+                var tType = typeof(T);
+                var classProperties = tType.GetProperties().ToList();
+                var reval = new List<T>();
+                if (reader != null && !reader.IsClosed)
+                {
+                    while (reader.Read())
+                    {
+                        Dictionary<string, object> result = DataReaderToList(reader, tType, classProperties, reval);
+                        var stringValue = SerializeObject(result);
+                        reval.Add((T)DeserializeObject<T>(stringValue));
+                    }
+                }
+                return reval;
+        }
+        /// <summary>
+        /// DataReaderToList
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="reader"></param>
+        /// <returns></returns>
+        public async Task<List<T>> DataReaderToListAsync<T>(IDataReader reader)
+        {
+            using (reader)
+            {
+                var tType = typeof(T);
+                var classProperties = tType.GetProperties().ToList();
+                var reval = new List<T>();
+                if (reader != null && !reader.IsClosed)
+                {
+                    while (await ((DbDataReader)reader).ReadAsync())
+                    {
+                        Dictionary<string, object> result = DataReaderToList(reader, tType, classProperties, reval);
+                        var stringValue = SerializeObject(result);
+                        reval.Add((T)DeserializeObject<T>(stringValue));
+                    }
+                }
+                return reval;
+            }
+        }
+        /// <summary>
+        /// DataReaderToList
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="reader"></param>
+        /// <returns></returns>
+        public async Task<List<T>> DataReaderToListAsyncNoUsing<T>(IDataReader reader)
+        {
+            var tType = typeof(T);
+            var classProperties = tType.GetProperties().ToList();
+            var reval = new List<T>();
+            if (reader != null && !reader.IsClosed)
+            {
+                while (await ((DbDataReader)reader).ReadAsync())
+                {
+                    Dictionary<string, object> result = DataReaderToList(reader, tType, classProperties, reval);
+                    var stringValue = SerializeObject(result);
+                    reval.Add((T)DeserializeObject<T>(stringValue));
+                }
+            }
+            return reval;
+        }
+
+        private Dictionary<string, object> DataReaderToList<T>(IDataReader reader, Type tType, List<PropertyInfo> classProperties, List<T> reval)
+        {
+            var readerValues = DataReaderToDictionary(reader, tType);
+            var result = new Dictionary<string, object>();
+            foreach (var item in classProperties)
+            {
+                var name = item.Name;
+                var typeName = tType.Name;
+                if (item.PropertyType.IsClass())
+                {
+                    result.Add(name, DataReaderToDynamicList_Part(readerValues, item, reval));
+                }
+                else
+                {
+                    if (readerValues.Any(it => it.Key.Equals(name, StringComparison.CurrentCultureIgnoreCase)))
+                    {
+                        var addValue = readerValues.ContainsKey(name) ? readerValues[name] : readerValues.First(it => it.Key.Equals(name, StringComparison.CurrentCultureIgnoreCase)).Value;
+                        if (addValue == DBNull.Value || addValue == null)
+                        {
+                            if (item.PropertyType.IsIn(UtilConstants.IntType, UtilConstants.DecType, UtilConstants.DobType, UtilConstants.ByteType))
+                            {
+                                addValue = 0;
+                            }
+                            else if (item.PropertyType == UtilConstants.GuidType)
+                            {
+                                addValue = Guid.Empty;
+                            }
+                            else if (item.PropertyType == UtilConstants.DateType)
+                            {
+                                addValue = DateTime.MinValue;
+                            }
+                            else if (item.PropertyType == UtilConstants.StringType)
+                            {
+                                addValue = null;
+                            }
+                            else
+                            {
+                                addValue = null;
+                            }
+                        }
+                        else if (item.PropertyType == UtilConstants.IntType)
+                        {
+                            addValue = Convert.ToInt32(addValue);
+                        }
+                        else if (UtilMethods.GetUnderType(item.PropertyType) == UtilConstants.LongType)
+                        {
+                            addValue = Convert.ToInt64(addValue);
+                        }
+                        result.Add(name, addValue);
+                    }
+                }
+            }
+
+            return result;
         }
 
         private Dictionary<string, object> DataReaderToDynamicList_Part<T>(Dictionary<string, object> readerValues, PropertyInfo item, List<T> reval)
@@ -207,13 +347,14 @@ namespace SqlSugar
                 else
                 {
                     var key = typeName + "." + name;
-                    var info = readerValues.Select(it=>it.Key).FirstOrDefault(it=>it.ToLower() == key.ToLower());
-                    if (info!=null)
+                    var info = readerValues.Select(it => it.Key).FirstOrDefault(it => it.ToLower() == key.ToLower());
+                    if (info != null)
                     {
                         var addItem = readerValues[info];
                         if (addItem == DBNull.Value)
                             addItem = null;
-                        if (prop.PropertyType == UtilConstants.IntType) {
+                        if (prop.PropertyType == UtilConstants.IntType)
+                        {
                             addItem = addItem.ObjToInt();
                         }
                         result.Add(name, addItem);
@@ -235,7 +376,26 @@ namespace SqlSugar
             DependencyManagement.TryJsonNet();
             return Context.CurrentConnectionConfig.ConfigureExternalServices.SerializeService.SerializeObject(value);
         }
-
+        public string SerializeObject(object value, Type type)
+        {
+            DependencyManagement.TryJsonNet();
+            if (type.IsAnonymousType())
+            {
+                return Context.CurrentConnectionConfig.ConfigureExternalServices.SerializeService.SerializeObject(value);
+            }
+            else
+            {
+                var isSugar = this.Context.EntityMaintenance.GetEntityInfo(type).Columns.Any(it=>it.NoSerialize || it.SerializeDateTimeFormat.HasValue());
+                if (isSugar)
+                {
+                    return Context.CurrentConnectionConfig.ConfigureExternalServices.SerializeService.SugarSerializeObject(value);
+                }
+                else
+                {
+                    return Context.CurrentConnectionConfig.ConfigureExternalServices.SerializeService.SerializeObject(value);
+                }
+            }
+        }
 
 
         /// <summary>
@@ -266,19 +426,18 @@ namespace SqlSugar
                 return DeserializeObject<T>(jsonString);
             }
         }
-        public SqlSugarClient CopyContext(bool isCopyEvents = false)
+        public SqlSugarProvider CopyContext(bool isCopyEvents = false)
         {
-            var newClient = new SqlSugarClient(this.TranslateCopy(Context.CurrentConnectionConfig));
+            var newClient = new SqlSugarProvider(this.TranslateCopy(Context.CurrentConnectionConfig));
+            newClient.CurrentConnectionConfig.ConfigureExternalServices = Context.CurrentConnectionConfig.ConfigureExternalServices;
             newClient.MappingColumns = this.TranslateCopy(Context.MappingColumns);
             newClient.MappingTables = this.TranslateCopy(Context.MappingTables);
             newClient.IgnoreColumns = this.TranslateCopy(Context.IgnoreColumns);
+            newClient.IgnoreInsertColumns = this.TranslateCopy(Context.IgnoreInsertColumns);
             if (isCopyEvents)
             {
-                newClient.Ado.IsEnableLogEvent = Context.Ado.IsEnableLogEvent;
-                newClient.Ado.LogEventStarting = Context.Ado.LogEventStarting;
-                newClient.Ado.LogEventCompleted = Context.Ado.LogEventCompleted;
-                newClient.Ado.ProcessingEventStartingSQL = Context.Ado.ProcessingEventStartingSQL;
                 newClient.QueryFilter = Context.QueryFilter;
+                newClient.CurrentConnectionConfig.AopEvents = Context.CurrentConnectionConfig.AopEvents;
             }
             return newClient;
         }
@@ -304,6 +463,29 @@ namespace SqlSugar
             return this.DeserializeObject<dynamic>(this.SerializeObject(deserializeObject));
 
         }
+        public List<T> DataTableToList<T>(DataTable table)
+        {
+            List<Dictionary<string, object>> deserializeObject = new List<Dictionary<string, object>>();
+            Dictionary<string, object> childRow;
+            foreach (DataRow row in table.Rows)
+            {
+                childRow = new Dictionary<string, object>();
+                foreach (DataColumn col in table.Columns)
+                {
+                    var addItem = row[col];
+                    if (addItem == DBNull.Value)
+                        addItem = null;
+                    childRow.Add(col.ColumnName, addItem);
+                }
+                deserializeObject.Add(childRow);
+            }
+            return this.DeserializeObject<List<T>>(this.SerializeObject(deserializeObject));
+        }
+        public Dictionary<string, object> DataTableToDictionary(DataTable table)
+        {
+           return table.Rows.Cast<DataRow>().ToDictionary(x => x[0].ToString(), x => x[1]);
+        }
+
         #endregion
 
         #region Cache
@@ -315,6 +497,7 @@ namespace SqlSugar
         public void RemoveCacheAll()
         {
             ReflectionInoHelper.RemoveAllCache();
+            InstanceFactory.RemoveCache();
         }
 
         public void RemoveCacheAll<T>()
@@ -328,136 +511,19 @@ namespace SqlSugar
         }
         #endregion
 
-        #region Query
-        public KeyValuePair<string, SugarParameter[]> ConditionalModelToSql(List<IConditionalModel> models,int beginIndex=0)
+        #region
+        public void PageEach<T>(IEnumerable<T> pageItems,int pageSize, Action<List<T>> action)
         {
-            if (models.IsNullOrEmpty()) return new KeyValuePair<string, SugarParameter[]>();
-            StringBuilder builder = new StringBuilder();
-            List<SugarParameter> parameters = new List<SugarParameter>();
-            var sqlBuilder = InstanceFactory.GetSqlbuilder(this.Context.CurrentConnectionConfig);
-            foreach (var model in models)
+            if (pageItems != null&& pageItems.Any())
             {
-                if (model is ConditionalModel)
+                int totalRecord = pageItems.Count();
+                int pageCount = (totalRecord + pageSize - 1) / pageSize;
+                for (int i = 1; i <= pageCount; i++)
                 {
-                    var item = model as ConditionalModel;
-                    var index = models.IndexOf(item)+ beginIndex;
-                    var type = index == 0 ? "" : "AND";
-                    if (beginIndex > 0) {
-                        type = null;
-                    }
-                    string temp = " {0} {1} {2} {3}  ";
-                    string parameterName = string.Format("{0}Conditional{1}{2}", sqlBuilder.SqlParameterKeyWord, item.FieldName, index);
-                    if (parameterName.Contains(".")) {
-                        parameterName = parameterName.Replace(".", "_");
-                    }
-                    switch (item.ConditionalType)
-                    {
-                        case ConditionalType.Equal:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "=", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.Like:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "LIKE", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, "%" + item.FieldValue + "%"));
-                            break;
-                        case ConditionalType.GreaterThan:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), ">", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.GreaterThanOrEqual:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), ">=", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.LessThan:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "<", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.LessThanOrEqual:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "<=", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.In:
-                            if (item.FieldValue == null) item.FieldValue = string.Empty;
-                            var inValue1 = ("(" + item.FieldValue.Split(',').ToJoinSqlInVals() + ")");
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "IN", inValue1);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.NotIn:
-                            if (item.FieldValue == null) item.FieldValue = string.Empty;
-                            var inValue2 = ("(" + item.FieldValue.Split(',').ToJoinSqlInVals() + ")");
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "NOT IN", inValue2);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.LikeLeft:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "LIKE", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue + "%"));
-                            break;
-                        case ConditionalType.NoLike:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), " NOT LIKE", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue + "%"));
-                            break;
-                        case ConditionalType.LikeRight:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "LIKE", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, "%" + item.FieldValue));
-                            break;
-                        case ConditionalType.NoEqual:
-                            builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "<>", parameterName);
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.IsNullOrEmpty:
-                            builder.AppendFormat("{0} ({1}) OR ({2}) ", type, item.FieldName.ToSqlFilter() + " IS NULL ", item.FieldName.ToSqlFilter() + " = '' ");
-                            parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            break;
-                        case ConditionalType.IsNot:
-                            if (item.FieldValue == null)
-                            {
-                                builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), " IS NOT ", "NULL");
-                            }
-                            else
-                            {
-                                builder.AppendFormat(temp, type, item.FieldName.ToSqlFilter(), "<>", parameterName);
-                                parameters.Add(new SugarParameter(parameterName, item.FieldValue));
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-                }
-                else
-                {
-                    var item = model as ConditionalCollections;
-                    if (item != null)
-                    {
-                        foreach (var con in item.ConditionalList)
-                        {
-                            var index = item.ConditionalList.IndexOf(con);
-                            var isFirst = index == 0;
-                            var isLast = index == (item.ConditionalList.Count - 1);
-                            if (isFirst)
-                            {
-                                builder.AppendFormat(" {0} ( ", con.Key.ToString().ToUpper());
-                            }
-                            List<IConditionalModel> conModels = new List<IConditionalModel>();
-                            conModels.Add(con.Value);
-                            var childSqlInfo = ConditionalModelToSql(conModels,1000*(1+index));
-                            if (!isFirst) {
-
-                                builder.AppendFormat(" {0} ", con.Key.ToString().ToUpper());
-                            }
-                            builder.Append(childSqlInfo.Key);
-                            parameters.AddRange(childSqlInfo.Value);
-                            if (isLast)
-                            {
-                                builder.Append(" ) ");
-                            }
-                            else {
-
-                            }
-                        }
-                    }
+                    var list = pageItems.Skip((i - 1) * pageSize).Take(pageSize).ToList();
+                    action(list);
                 }
             }
-            return new KeyValuePair<string, SugarParameter[]>(builder.ToString(), parameters.ToArray());
         }
         #endregion
     }

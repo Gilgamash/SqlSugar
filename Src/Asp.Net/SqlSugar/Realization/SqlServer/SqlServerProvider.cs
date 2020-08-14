@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Text;
@@ -55,7 +56,7 @@ namespace SqlSugar
         {
             return new SqlDataAdapter();
         }
-        public override IDbCommand GetCommand(string sql, SugarParameter[] parameters)
+        public override DbCommand GetCommand(string sql, SugarParameter[] parameters)
         {
             SqlCommand sqlCommand = new SqlCommand(sql, (SqlConnection)this.Connection);
             sqlCommand.CommandType = this.CommandType;
@@ -66,13 +67,13 @@ namespace SqlSugar
             }
             if (parameters.HasValue())
             {
-                IDataParameter[] ipars = ToIDbDataParameter(parameters);
-                sqlCommand.Parameters.AddRange((SqlParameter[])ipars);
+                SqlParameter[] ipars = GetSqlParameter(parameters);
+                sqlCommand.Parameters.AddRange(ipars);
             }
             CheckConnection();
             return sqlCommand;
         }
-        public override void SetCommandToAdapter(IDataAdapter dataAdapter, IDbCommand command)
+        public override void SetCommandToAdapter(IDataAdapter dataAdapter, DbCommand command)
         {
             ((SqlDataAdapter)dataAdapter).SelectCommand = (SqlCommand)command;
         }
@@ -99,6 +100,51 @@ namespace SqlSugar
                 sqlParameter.Direction = parameter.Direction;
                 result[index] = sqlParameter;
                 if (sqlParameter.Direction.IsIn(ParameterDirection.Output, ParameterDirection.InputOutput,ParameterDirection.ReturnValue))
+                {
+                    if (this.OutputParameters == null) this.OutputParameters = new List<IDataParameter>();
+                    this.OutputParameters.RemoveAll(it => it.ParameterName == sqlParameter.ParameterName);
+                    this.OutputParameters.Add(sqlParameter);
+                }
+                ++index;
+            }
+            return result;
+        }
+        /// <summary>
+        /// if mysql return MySqlParameter[] pars
+        /// if sqlerver return SqlParameter[] pars ...
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <returns></returns>
+        public SqlParameter[] GetSqlParameter(params SugarParameter[] parameters)
+        {
+            if (parameters == null || parameters.Length == 0) return null;
+            SqlParameter[] result = new SqlParameter[parameters.Length];
+            int index = 0;
+            foreach (var parameter in parameters)
+            {
+                if (parameter.Value == null) parameter.Value = DBNull.Value;
+                var sqlParameter = new SqlParameter();
+                sqlParameter.ParameterName = parameter.ParameterName;
+                sqlParameter.UdtTypeName = parameter.UdtTypeName;
+                sqlParameter.Size = parameter.Size;
+                sqlParameter.Value = parameter.Value;
+                sqlParameter.DbType = parameter.DbType;
+                if (sqlParameter.Value!=null&& sqlParameter.Value != DBNull.Value && sqlParameter.DbType == System.Data.DbType.DateTime)
+                {
+                    var date = Convert.ToDateTime(sqlParameter.Value);
+                    if (date==DateTime.MinValue)
+                    {
+                        sqlParameter.Value = Convert.ToDateTime("1753/01/01");
+                    }
+                }
+                sqlParameter.Direction = parameter.Direction;
+                result[index] = sqlParameter;
+                if (parameter.TypeName.HasValue()) {
+                    sqlParameter.TypeName = parameter.TypeName;
+                    sqlParameter.SqlDbType = SqlDbType.Structured;
+                    sqlParameter.DbType = System.Data.DbType.Object;
+                }
+                if (sqlParameter.Direction.IsIn(ParameterDirection.Output, ParameterDirection.InputOutput, ParameterDirection.ReturnValue))
                 {
                     if (this.OutputParameters == null) this.OutputParameters = new List<IDataParameter>();
                     this.OutputParameters.RemoveAll(it => it.ParameterName == sqlParameter.ParameterName);

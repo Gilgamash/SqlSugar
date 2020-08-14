@@ -95,6 +95,18 @@ namespace SqlSugar
             return result;
         }
 
+
+        public static float? GetConvertDoubleToFloat(this IDataRecord dr, int i)
+        {
+            if (dr.IsDBNull(i))
+            {
+                return null;
+            }
+            var result = dr.GetDouble(i);
+            return Convert.ToSingle(result);
+        }
+
+
         public static Guid? GetConvertGuid(this IDataRecord dr, int i)
         {
             if (dr.IsDBNull(i))
@@ -123,6 +135,15 @@ namespace SqlSugar
             }
             var result = dr.GetInt32(i);
             return result;
+        }
+        public static T GetConvertValue<T>(this IDataRecord dr, int i)
+        {
+            if (dr.IsDBNull(i))
+            {
+                return default(T);
+            }
+            var result = dr.GetValue(i);
+            return UtilMethods.To<T>(result);
         }
 
         public static long? GetConvetInt64(this IDataRecord dr, int i)
@@ -204,13 +225,28 @@ namespace SqlSugar
             {
                 return null;
             }
-            return (T)Convert.ChangeType(dr.GetValue(i), typeof(T));
+            var result = dr.GetValue(i);
+            return UtilMethods.To<T>(result);
 
         }
 
         public static T GetOther<T>(this IDataReader dr, int i)
         {
-            return (T)Convert.ChangeType(dr.GetValue(i), typeof(T));
+            if (dr.IsDBNull(i))
+            {
+                return default(T);
+            }
+            var result = dr.GetValue(i);
+            return UtilMethods.To<T>(result);
+        }
+
+        public static T GetJson<T>(this IDataReader dr, int i)
+        {
+            var obj = dr.GetValue(i);
+            if (obj == null)
+                return default(T);
+            var value = obj.ObjToString();
+            return new SerializeService().DeserializeObject<T>(value);
         }
 
         public static Nullable<T> GetConvertEnum_Null<T>(this IDataReader dr, int i) where T : struct
@@ -227,71 +263,26 @@ namespace SqlSugar
         public static T GetEnum<T>(this IDataReader dr, int i) where T : struct
         {
             object value = dr.GetValue(i);
+            if (value != null)
+            {
+                if (value.GetType() == UtilConstants.DecType)
+                {
+                    value = Convert.ToUInt32(value);
+                }
+                else if (value.GetType() == UtilConstants.StringType)
+                {
+                    return (T)Enum.Parse(typeof(T), value.ObjToString());
+                }
+            }
             T t = (T)Enum.ToObject(typeof(T), value);
             return t;
         }
 
-        public static object GetEntity(this IDataReader dr, SqlSugarClient context)
+        public static object GetEntity(this IDataReader dr, SqlSugarProvider context)
         {
             return null;
         }
 
-        #endregion
-
-        #region Sqlite Extensions
-        public static Nullable<T> GetSqliteTypeNull<T>(this IDataReader dr, int i) where T : struct
-        {
-            var type = UtilMethods.GetUnderType(typeof(T));
-            if (dr.IsDBNull(i))
-            {
-                return null;
-            }
-            return SqliteTypeConvert<T>(dr, i, type);
-        }
-
-        public static T GetSqliteType<T>(this IDataReader dr, int i) where T : struct
-        {
-            var type = typeof(T);
-            return SqliteTypeConvert<T>(dr, i, type);
-        }
-
-        private static T SqliteTypeConvert<T>(IDataReader dr, int i, Type type) where T : struct
-        {
-            if (type.IsIn(UtilConstants.IntType))
-            {
-                return (T)((object)(dr.GetInt32(i)));
-            }
-            else if (type == UtilConstants.DateType)
-            {
-                return (T)Convert.ChangeType(Convert.ToDateTime(dr.GetString(i)), type);
-            }
-            else if (type == UtilConstants.DecType)
-            {
-                return (T)Convert.ChangeType(dr.GetDecimal(i), type);
-            }
-            else if (type == UtilConstants.DobType)
-            {
-                return (T)Convert.ChangeType(dr.GetDouble(i), type);
-            }
-            else if (type == UtilConstants.BoolType)
-            {
-                return (T)Convert.ChangeType(dr.GetBoolean(i), type);
-            }
-            else if (type == UtilConstants.LongType)
-            {
-                return (T)Convert.ChangeType(dr.GetInt64(i), type);
-            }
-            else if (type == UtilConstants.GuidType)
-            {
-                string guidString = dr.GetString(i);
-                string changeValue = guidString.IsNullOrEmpty() ? Guid.Empty.ToString() : guidString;
-                return (T)Convert.ChangeType(Guid.Parse(changeValue), type);
-            }
-            else
-            {
-                return (T)Convert.ChangeType((dr.GetString(i)), type);
-            }
-        } 
         #endregion
     }
 }

@@ -11,7 +11,7 @@ namespace SqlSugar
 {
     public partial class OracleExpressionContext : ExpressionContext, ILambdaExpressions
     {
-        public SqlSugarClient Context { get; set; }
+        public SqlSugarProvider Context { get; set; }
         public OracleExpressionContext()
         {
             base.DbMehtods = new OracleMethod();
@@ -40,6 +40,12 @@ namespace SqlSugar
     }
     public partial class OracleMethod : DefaultDbMethod, IDbMethods
     {
+        public override string ToInt64(MethodCallExpressionModel model)
+        {
+            var parameter = model.Args[0];
+            return string.Format(" CAST({0} AS Number)", parameter.MemberName);
+        }
+
         public override string ToTime(MethodCallExpressionModel model)
         {
             var parameter = model.Args[0];
@@ -60,20 +66,20 @@ namespace SqlSugar
             switch (type)
             {
                 case DateType.Year:
-                    return string.Format("(CAST(TO_CHAR({0},'yyyy') AS NUMBER)",parameter.MemberName);
+                    return string.Format("(CAST(TO_CHAR({0},'yyyy') AS NUMBER))", parameter.MemberName);
                 case DateType.Month:
-                    return string.Format("(CAST(TO_CHAR({0},'mm') AS NUMBER)", parameter.MemberName);
+                    return string.Format("(CAST(TO_CHAR({0},'mm') AS NUMBER))", parameter.MemberName);
                 case DateType.Hour:
-                    return string.Format("(CAST(TO_CHAR({0},'hh24') AS NUMBER)", parameter.MemberName);
+                    return string.Format("(CAST(TO_CHAR({0},'hh24') AS NUMBER))", parameter.MemberName);
                 case DateType.Second:
-                    return string.Format("(CAST(TO_CHAR({0},'ss') AS NUMBER)", parameter.MemberName);
+                    return string.Format("(CAST(TO_CHAR({0},'ss') AS NUMBER))", parameter.MemberName);
                 case DateType.Minute:
-                    return string.Format("(CAST(TO_CHAR({0},'mi') AS NUMBER)", parameter.MemberName);
+                    return string.Format("(CAST(TO_CHAR({0},'mi') AS NUMBER))", parameter.MemberName);
                 case DateType.Millisecond:
-                    return string.Format("(CAST(TO_CHAR({0},'ff3') AS NUMBER)", parameter.MemberName);
+                    return string.Format("(CAST(TO_CHAR({0},'ff3') AS NUMBER))", parameter.MemberName);
                 case DateType.Day:
                 default:
-                    return string.Format("(CAST(TO_CHAR({0},'dd') AS NUMBER)", parameter.MemberName);
+                    return string.Format("(CAST(TO_CHAR({0},'dd') AS NUMBER))", parameter.MemberName);
             }
         }
         public override string DateAddByType(MethodCallExpressionModel model)
@@ -173,12 +179,22 @@ namespace SqlSugar
 
         public override string MergeString(params string[] strings)
         {
-            return string.Join("||", strings).Replace("+", "");
+            return string.Join("||", strings);
         }
 
         public override string GetDate()
         {
             return "sysdate";
+        }
+
+        public override string GetRandom()
+        {
+            return "dbms_random.value";
+        }
+
+        public override string CharIndex(MethodCallExpressionModel model)
+        {
+            return string.Format("instr ({0},{1},1,1) ", model.Args[0].MemberName, model.Args[1].MemberName);
         }
     }
 }

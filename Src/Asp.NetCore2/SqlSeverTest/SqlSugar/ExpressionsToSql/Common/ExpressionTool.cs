@@ -41,6 +41,8 @@ namespace SqlSugar
                 case ExpressionType.Multiply:
                 case ExpressionType.MultiplyChecked:
                     return "*";
+                case ExpressionType.Modulo:
+                    return "%";
                 case ExpressionType.Coalesce:
                     throw new Exception("Expression no support ?? ,Use SqlFunc.IsNull");
                 default:
@@ -94,7 +96,14 @@ namespace SqlSugar
                     var isField = memberExpr.Member.MemberType == MemberTypes.Field;
                     if (isProperty)
                     {
-                        reval = GetPropertyValue(memberExpr);
+                        try
+                        {
+                            reval = GetPropertyValue(memberExpr);
+                        }
+                        catch 
+                        {
+                            reval = null;
+                        }
                     }
                     else if (isField)
                     {
@@ -252,6 +261,11 @@ namespace SqlSugar
         public static bool IsValueType(Type type)
         {
             return !IsEntity(type);
+        }
+
+        public static bool IsUnConvertExpress(Expression item)
+        {
+            return item is UnaryExpression && item.NodeType == ExpressionType.Convert;
         }
     }
 }

@@ -32,9 +32,17 @@ namespace SqlSugar
             {
                 ResolveValueBool(parameter, baseParameter, expression, isLeft, isSingle);
             }
+            else if (isValue && expression.Expression != null && expression.Expression is MethodCallExpression)
+            {
+                ResolveCallValue(parameter, baseParameter, expression, isLeft, isSetTempData, isSingle);
+            }
             else if (isValue)
             {
                 ResolveValue(parameter, baseParameter, expression, isLeft, isSetTempData, isSingle);
+            }
+            else if (expression.Expression != null && expression.Expression.Type == UtilConstants.DateType && expression is MemberExpression && expression.Expression is MethodCallExpression)
+            {
+                ResolveDateDateByCall(parameter, isLeft, expression);
             }
             else if (isDateDate)
             {
@@ -54,12 +62,14 @@ namespace SqlSugar
             }
         }
 
+
         #region Resolve default
         private void ResolveDefault(ExpressionParameter parameter, ExpressionParameter baseParameter, MemberExpression expression, bool? isLeft, bool isSetTempData, bool isSingle)
         {
             string fieldName = string.Empty;
             switch (parameter.Context.ResolveType)
             {
+                case ResolveExpressType.Update:
                 case ResolveExpressType.SelectSingle:
                     fieldName = GetSingleName(parameter, expression, isLeft);
                     if (isSetTempData)
@@ -99,6 +109,37 @@ namespace SqlSugar
         #endregion
 
         #region Resolve Where
+        private void ResolveBoolLogic(ExpressionParameter parameter, ExpressionParameter baseParameter, MemberExpression expression, bool? isLeft, bool isSetTempData, bool isSingle)
+        {
+            string fieldName = string.Empty;
+            if (isSetTempData)
+            {
+                if (ExpressionTool.IsConstExpression(expression))
+                {
+                    var value = ExpressionTool.GetMemberValue(expression.Member, expression);
+                    baseParameter.CommonTempData = value+"=1 ";
+                }
+                else
+                {
+                    fieldName = GetName(parameter, expression, null, isSingle);
+                    baseParameter.CommonTempData = fieldName+"=1 ";
+                }
+            }
+            else
+            {
+                if (ExpressionTool.IsConstExpression(expression))
+                {
+                    var value = ExpressionTool.GetMemberValue(expression.Member, expression);
+                    base.AppendValue(parameter, isLeft, value+"=1 ");
+                }
+                else
+                {
+                    fieldName = GetName(parameter, expression, isLeft, isSingle);
+                    AppendMember(parameter, isLeft, fieldName+"=1 ");
+                }
+            }
+        }
+
         private void ResolveWhereLogic(ExpressionParameter parameter, ExpressionParameter baseParameter, MemberExpression expression, bool? isLeft, bool isSetTempData, bool isSingle)
         {
             string fieldName = string.Empty;
@@ -132,11 +173,65 @@ namespace SqlSugar
         #endregion
 
         #region Resolve special member
+        private void ResolveDateDateByCall(ExpressionParameter parameter, bool? isLeft, MemberExpression expression)
+        {
+            var value = GetNewExpressionValue(expression.Expression);
+            if (expression.Member.Name == "Date")
+            {
+                AppendMember(parameter, isLeft, GetToDate(this.Context.DbMehtods.MergeString(
+                                  this.GetDateValue(value, DateType.Year),
+                                  "'-'",
+                                  this.GetDateValue(value, DateType.Month),
+                                  "'-'",
+                                  this.GetDateValue(value, DateType.Day))));
+            }
+            else
+            {
+                foreach (int myCode in Enum.GetValues(typeof(DateType)))
+                {
+                    string strName = Enum.GetName(typeof(DateType), myCode);//获取名称
+                    if (expression.Member.Name == strName)
+                    {
+                        AppendMember(parameter, isLeft, this.Context.DbMehtods.MergeString(this.GetDateValue(value, (DateType)(myCode))));
+                    }
+                }
+            }
+        }
+        private void ResolveCallValue(ExpressionParameter parameter, ExpressionParameter baseParameter, MemberExpression expression, bool? isLeft, bool isSetTempData, bool isSingle)
+        {
+            try
+            {
+                baseParameter.ChildExpression = expression;
+                string fieldName = string.Empty;
+                if (isSetTempData)
+                {
+                    var value = ExpressionTool.DynamicInvoke(expression);
+                    baseParameter.CommonTempData = value;
+                }
+                else
+                {
+                    var value = ExpressionTool.DynamicInvoke(expression);
+                    base.AppendValue(parameter, isLeft, value);
+                }
+            }
+            catch 
+            {
+                Check.Exception(true, "Not Support {0}",expression.ToString());
+            }
+        }
+
         private MemberExpression ResolveValue(ExpressionParameter parameter, ExpressionParameter baseParameter, MemberExpression expression, bool? isLeft, bool isSetTempData, bool isSingle)
         {
             expression = expression.Expression as MemberExpression;
             baseParameter.ChildExpression = expression;
-            ResolveWhereLogic(parameter, baseParameter, expression, isLeft, isSetTempData, isSingle);
+            if (UtilMethods.GetUnderType(expression.Type) == UtilConstants.BoolType&&parameter.BaseExpression!=null&&ExpressionTool.IsLogicOperator(parameter.BaseExpression))
+            {
+                ResolveBoolLogic(parameter, baseParameter, expression, isLeft, isSetTempData, isSingle);
+            }
+            else
+            {
+                ResolveWhereLogic(parameter, baseParameter, expression, isLeft, isSetTempData, isSingle);
+            }
             return expression;
         }
 
@@ -217,7 +312,7 @@ namespace SqlSugar
             if (this.Expression.Type == UtilConstants.DateType && this.Expression.ToString() == "DateTime.Now")
             {
                 this.Expression = expression;
-                var parameterName=base.AppendParameter(ExpressionTool.GetMemberValue(expression.Member, expression));
+                var parameterName = base.AppendParameter(ExpressionTool.GetMemberValue(expression.Member, expression));
                 base.AppendMember(parameter, isLeft, parameterName);
             }
             else
@@ -241,18 +336,41 @@ namespace SqlSugar
             this.Expression = expression.Expression;
             this.Start();
             var methodParamter = new MethodCallExpressionArgs() { IsMember = true, MemberName = parameter.CommonTempData, MemberValue = null };
+            if (expression.Expression?.Type != null)
+            {
+                methodParamter.Type =UtilMethods.GetUnderType(expression.Expression?.Type);
+            }
             var result = this.Context.DbMehtods.HasValue(new MethodCallExpressionModel()
             {
                 Args = new List<MethodCallExpressionArgs>() {
                     methodParamter
                   }
             });
-            this.Context.Result.Append(result);
+            if (parameter.BaseExpression != null && ExpressionTool.IsLogicOperator(parameter.BaseExpression) && parameter.IsLeft == true)
+            {
+                if (base.Context.Result.Contains(ExpressionConst.FormatSymbol))
+                {
+                    base.Context.Result.Replace(ExpressionConst.FormatSymbol, "");
+                }
+                this.Context.Result.Append(result+" "+ExpressionTool.GetOperator(parameter.BaseExpression.NodeType)+" ");
+            }
+            else
+            {
+                this.Context.Result.Append(result);
+            }
             parameter.CommonTempData = null;
         }
 
         private void ResolveLength(ExpressionParameter parameter, bool? isLeft, MemberExpression expression)
         {
+            if (parameter.Context.ResolveType == ResolveExpressType.FieldSingle)
+            {
+                parameter.Context.ResolveType = ResolveExpressType.WhereSingle;
+            }
+            if (parameter.Context.ResolveType == ResolveExpressType.FieldMultiple)
+            {
+                parameter.Context.ResolveType = ResolveExpressType.WhereMultiple;
+            }
             var oldCommonTempDate = parameter.CommonTempData;
             parameter.CommonTempData = CommonTempDataType.Result;
             this.Expression = expression.Expression;
